@@ -48,7 +48,7 @@ function setTab(t) {
 }
 function updGo() {
   const draw = S.tab === 'draw', has = draw && pad?.strokes.length;
-  $('#ls-go').textContent = draw ? (has ? '✦ Make 6 logos with my drawing' : 'Draw something first') : '✦ Show me 6 logos';
+  $('#ls-go').textContent = draw ? (has ? '✦ Make logos from my drawing' : 'Draw something first') : '✦ Show me logos';
   $('#ls-go').disabled = draw && !has;
 }
 let sketchT;
@@ -58,7 +58,7 @@ function onSketch() {
     const st = pad.strokes;
     if (!st.length) { S.sketches = null; $('#ls-refined').innerHTML = ''; return; }
     S.sketches = { clean: refineSketch(st, 'clean'), geo: refineSketch(st, 'geo'), bold: refineSketch(st, 'bold') };
-    $('#ls-refined').innerHTML = '<small>Cleaned up — pick a version</small>' + [['clean', 'Clean'], ['geo', 'Geometric'], ['bold', 'Bold']].map(([k, t]) => `<button type="button" data-smode="${k}" class="${S.sketchMode === k ? 'on' : ''}"><canvas width="120" height="120"></canvas><span>${t}</span></button>`).join('');
+    $('#ls-refined').innerHTML = '<small>Cleaned up</small>' + [['clean', 'Clean'], ['geo', 'Geometric'], ['bold', 'Bold']].map(([k, t]) => `<button type="button" data-smode="${k}" class="${S.sketchMode === k ? 'on' : ''}"><canvas width="120" height="120"></canvas><span>${t}</span></button>`).join('');
     $$('#ls-refined canvas').forEach((c) => { const k = c.parentElement.dataset.smode; paintInto(c, { layout: 'mark', name: '', font: 'Inter', mark: { source: 'sketch', sketch: S.sketches[k], container: 'none' }, treatment: 'none', colors: { primary: '#1c1a17' } }, { pad: 0.14, bg: '#fff' }); });
   }, 120);
 }
@@ -70,7 +70,7 @@ async function makeOptions() {
   S.busy = true; S.used = false;
   showResults();
   $('#ls-grid').innerHTML = Array.from({ length: 6 }, () => '<div class="ls-card skel"><i></i></div>').join('');
-  $('#ls-res-note').textContent = 'Designing your logos…';
+  $('#ls-res-note').textContent = 'Designing…'; $('#ls-tweak').innerHTML = '';
   const c = ctx();
   let opts = null, note = '';
   if (isAI()) {
@@ -86,42 +86,50 @@ async function makeOptions() {
   opts = opts ? enforceLogos([...opts, ...local].slice(0, Math.max(6, opts.length)).slice(0, 6), { ...c, name: S.name }) : local;
   S.options = opts; S.sel = 0; S.busy = false;
   await loadFonts(...new Set(opts.map((o) => o.font)));
-  $('#ls-res-note').textContent = note || 'Tap one to tweak it';
+  $('#ls-res-note').textContent = note;
   renderGrid(); renderTweak();
 }
-function showResults() { $('#ls-make').hidden = true; $('#ls-results').hidden = false; $('#lstudio').scrollTop = 0; $('.ls-wrap').scrollTop = 0; }
+function showResults() { $('#ls-make').hidden = true; $('#ls-results').hidden = false; $('#ls-tabs').style.visibility = 'hidden'; $('.ls-wrap').scrollTop = 0; }
 function renderGrid() {
-  $('#ls-grid').innerHTML = S.options.map((o, i) => `<button type="button" class="ls-card ${i === S.sel ? 'on' : ''}" data-opt="${i}" title="${(o.rationale || '').replace(/"/g, '&quot;')}">
-    <canvas class="big" width="520" height="340"></canvas>
-    <span class="ls-meta"><span class="mini"><canvas width="96" height="32"></canvas><canvas width="96" height="32"></canvas></span><small>${LAYOUTS[o.layout]} · ${o.font}</small></span></button>`).join('');
-  $$('#ls-grid .ls-card').forEach((card, i) => {
-    const [big, small, mono] = card.querySelectorAll('canvas');
-    paintInto(big, S.options[i]); paintInto(small, S.options[i], { pad: 0.06 }); paintInto(mono, S.options[i], { mono: true, bg: '#fff', pad: 0.06 });
-  });
+  $('#ls-grid').innerHTML = S.options.map((o, i) => `<button type="button" class="ls-card ${i === S.sel ? 'on' : ''}" data-opt="${i}" aria-label="${LAYOUTS[o.layout]}"><canvas width="560" height="380"></canvas></button>`).join('');
+  $$('#ls-grid canvas').forEach((c, i) => paintInto(c, S.options[i]));
 }
 function repaintSel() {
-  const card = $(`#ls-grid [data-opt="${S.sel}"]`); if (!card) return renderGrid();
-  const [big, small, mono] = card.querySelectorAll('canvas'), o = S.options[S.sel];
-  paintInto(big, o); paintInto(small, o, { pad: 0.06 }); paintInto(mono, o, { mono: true, bg: '#fff', pad: 0.06 });
-  card.querySelector('small').textContent = `${LAYOUTS[o.layout]} · ${o.font}`;
+  const o = S.options[S.sel], c = $(`#ls-grid [data-opt="${S.sel}"] canvas`);
+  if (c) paintInto(c, o);
+  const sm = $('#lt-small'), mo = $('#lt-mono');
+  if (sm) paintInto(sm, o, { pad: 0.08, bg: '#fff' });
+  if (mo) paintInto(mo, o, { mono: true, bg: '#fff', pad: 0.08 });
 }
 function renderTweak() {
   const o = S.options[S.sel]; if (!o) return;
   const fixed = FONTS[o.font]?.w != null, c = ctx(), glyphs = glyphsFor(c.category, S.idea);
   const markOpts = [...(c.sketch || o.mark?.sketch ? ['__sketch'] : []), ...glyphs, 'none'];
   const curMark = o.mark?.source === 'sketch' ? '__sketch' : o.mark?.source === 'glyph' ? o.mark.glyph : 'none';
+  const tab = S.ttab || 'type';
+  const panes = {
+    type: `
+      <label class="lt"><span>Font</span><select data-t="font">${LOGO_FONTS.map((f) => `<option ${f === o.font ? 'selected' : ''} value="${f}">${f}</option>`).join('')}</select></label>
+      <div class="lt"><span>Layout</span><div class="chips">${Object.entries(LAYOUTS).map(([k, v]) => `<button type="button" data-t="layout" data-v="${k}" class="${o.layout === k ? 'on' : ''}">${v}</button>`).join('')}</div></div>
+      <div class="lt two"><div><span>Letters</span><div class="seg">${[['title', 'Aa'], ['upper', 'AA'], ['lower', 'aa']].map(([k, v]) => `<button type="button" data-t="case" data-v="${k}" class="${o.case === k ? 'on' : ''}">${v}</button>`).join('')}</div></div>
+        <div><span>Weight</span><div class="seg">${['regular', 'bold'].map((k) => `<button type="button" data-t="weight" data-v="${k}" class="${o.weight === k ? 'on' : ''}" ${fixed && k === 'bold' ? 'disabled' : ''}>${k === 'bold' ? 'Bold' : 'Regular'}</button>`).join('')}</div></div></div>
+      <label class="lt"><span>Spacing</span><input type="range" min="-4" max="30" step="1" value="${o.tracking}" data-t="tracking"/></label>
+      <label class="lt"><span>Detail</span><select data-t="treatment">${Object.entries(TREATMENTS).map(([k, v]) => `<option value="${k}" ${o.treatment === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>`,
+    symbol: `
+      <div class="lt"><span>Symbol</span><div class="chips icons">${markOpts.map((g) => `<button type="button" data-t="mark" data-v="${g}" class="${curMark === g ? 'on' : ''}" title="${g === '__sketch' ? 'My drawing' : g}">${g === '__sketch' ? '✍ Mine' : g === 'none' ? 'None' : glyphSvg(g)}</button>`).join('')}</div></div>
+      <div class="lt"><span>Shape</span><div class="chips">${Object.entries(CONTAINERS).map(([k, v]) => `<button type="button" data-t="container" data-v="${k}" class="${(o.mark?.container || 'none') === k ? 'on' : ''}">${v}</button>`).join('')}</div></div>
+      <label class="check"><input type="checkbox" data-t="style" ${o.mark?.style === 'line' ? 'checked' : ''}/><span>Outline instead of solid</span></label>`,
+    colour: `
+      <div class="lt two"><label><span>Main</span><input type="color" data-t="primary" value="${o.colors.primary}"/></label><label><span>Second</span><input type="color" data-t="secondary" value="${o.colors.secondary}"/></label></div>
+      <div class="lt"><span>Quick picks</span><div class="wz-colors">${SWATCHES.filter((x) => x !== '#f6f1e7').map((x) => `<button type="button" class="sw" style="--c:${x}" data-t="pick" data-v="${x}" aria-label="${x}"></button>`).join('')}</div></div>`,
+  };
   $('#ls-tweak').innerHTML = `
+    <div class="lt-prev"><figure><canvas id="lt-small" width="300" height="80"></canvas><figcaption>Small</figcaption></figure><figure><canvas id="lt-mono" width="300" height="80"></canvas><figcaption>One colour</figcaption></figure></div>
     ${o.rationale ? `<p class="ls-why">${o.rationale}</p>` : ''}
-    <label class="lt"><span>Font</span><select data-t="font">${LOGO_FONTS.map((f) => `<option ${f === o.font ? 'selected' : ''} value="${f}">${f} — ${FONTS[f].label}</option>`).join('')}</select></label>
-    <div class="lt"><span>Layout</span><div class="chips">${Object.entries(LAYOUTS).map(([k, v]) => `<button type="button" data-t="layout" data-v="${k}" class="${o.layout === k ? 'on' : ''}">${v}</button>`).join('')}</div></div>
-    <div class="lt two"><div><span>Letters</span><div class="seg">${[['title', 'Aa'], ['upper', 'AA'], ['lower', 'aa']].map(([k, v]) => `<button type="button" data-t="case" data-v="${k}" class="${o.case === k ? 'on' : ''}">${v}</button>`).join('')}</div></div>
-      <div><span>Weight</span><div class="seg">${['regular', 'bold'].map((k) => `<button type="button" data-t="weight" data-v="${k}" class="${o.weight === k ? 'on' : ''}" ${fixed && k === 'bold' ? 'disabled title="This font has one weight"' : ''}>${k === 'bold' ? 'Bold' : 'Regular'}</button>`).join('')}</div></div></div>
-    <label class="lt"><span>Letter spacing</span><input type="range" min="-4" max="30" step="1" value="${o.tracking}" data-t="tracking"/></label>
-    <label class="lt"><span>Detail</span><select data-t="treatment">${Object.entries(TREATMENTS).map(([k, v]) => `<option value="${k}" ${o.treatment === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-    <div class="lt"><span>Symbol</span><div class="chips icons">${markOpts.map((g) => `<button type="button" data-t="mark" data-v="${g}" class="${curMark === g ? 'on' : ''}" title="${g === '__sketch' ? 'My drawing' : g}">${g === '__sketch' ? '✍ Mine' : g === 'none' ? 'None' : glyphSvg(g)}</button>`).join('')}</div></div>
-    <div class="lt"><span>Shape</span><div class="chips">${Object.entries(CONTAINERS).map(([k, v]) => `<button type="button" data-t="container" data-v="${k}" class="${(o.mark?.container || 'none') === k ? 'on' : ''}">${v}</button>`).join('')}
-      <button type="button" data-t="style" class="${o.mark?.style === 'line' ? 'on' : ''}" title="Outline instead of solid">Outline</button></div></div>
-    <div class="lt two"><label><span>Main colour</span><input type="color" data-t="primary" value="${o.colors.primary}"/></label><label><span>Second colour</span><input type="color" data-t="secondary" value="${o.colors.secondary}"/></label></div>`;
+    <div class="seg lt-tabs">${[['type', 'Type'], ['symbol', 'Symbol'], ['colour', 'Colour']].map(([k, v]) => `<button type="button" data-ttab="${k}" class="${tab === k ? 'on' : ''}">${v}</button>`).join('')}</div>
+    <div class="lt-pane">${panes[tab]}</div>
+    <div class="lt-dl">Download <button type="button" data-lsdl="png">PNG</button><button type="button" data-lsdl="svg">SVG</button><button type="button" data-lsdl="mono">Black</button></div>`;
+  repaintSel();
 }
 function tweak(t, v) {
   const o = { ...S.options[S.sel], mark: { ...(S.options[S.sel].mark || {}) }, colors: { ...S.options[S.sel].colors } };
@@ -134,6 +142,7 @@ function tweak(t, v) {
   else if (t === 'mark') { if (v === '__sketch') o.mark = { ...o.mark, source: 'sketch', sketch: ctx().sketch || o.mark.sketch }; else if (v === 'none') o.mark = { ...o.mark, source: 'none' }; else o.mark = { ...o.mark, source: 'glyph', glyph: v }; }
   else if (t === 'container') o.mark.container = v;
   else if (t === 'style') o.mark.style = o.mark.style === 'line' ? 'fill' : 'line';
+  else if (t === 'pick') o.colors.primary = v;
   else if (t === 'primary' || t === 'secondary') o.colors[t] = v;
   if (o.layout === 'emblem') o.mark.container = 'circle';
   if (['mark-left', 'mark-top'].includes(o.layout) && o.mark.source === 'none') o.mark = { ...o.mark, source: 'glyph', glyph: glyphsFor(ctx().category, S.idea)[0] };
@@ -158,11 +167,12 @@ export function openLogoStudio({ name = '', brief = '', colors = [], vibes = [],
   if (ai) isAI = ai;
   Object.assign(S, { name, brief, colors: colors.slice(0, 2), onUse, onSkip, used: false });
   if (vibes.length) S.prefs = vibesToPrefs(vibes);
-  $('#ls-name-hint').textContent = name ? '' : '— leave empty and we\'ll suggest one';
-  $('#ls-skip').textContent = onSkip ? 'Skip — just use my brand name' : 'Cancel';
+  $('#ls-name').placeholder = name ? 'Brand name' : 'Brand name — or leave empty for ideas';
+  $('#ls-skip').textContent = onSkip ? 'Skip, use my name' : 'Cancel';
+  $('#ls-tabs').style.visibility = 'visible'; S.ttab = 'type';
   $('#lstudio').showModal();
   if (spec) { // editing an existing logo
-    S.options = [spec, ...variations(spec)]; S.sel = 0; showResults(); $('#ls-res-note').textContent = 'Your logo, plus 4 variations';
+    S.options = [spec, ...variations(spec)]; S.sel = 0; showResults(); $('#ls-res-note').textContent = '';
     loadFonts(...new Set(S.options.map((o) => o.font))).then(() => { renderGrid(); renderTweak(); });
   } else { $('#ls-make').hidden = false; $('#ls-results').hidden = true; renderMake(); }
 }
@@ -180,7 +190,8 @@ export function initLogoStudio() {
     if (d.sact === 'undo') pad.undo();
     if (d.sact === 'clear') pad.clear();
     if (d.smode) { S.sketchMode = d.smode; $$('[data-smode]').forEach((x) => x.classList.toggle('on', x === b)); }
-    if (d.opt != null) { S.sel = +d.opt; $$('#ls-grid .ls-card').forEach((x) => x.classList.toggle('on', x === b)); renderTweak(); }
+    if (d.opt != null) { S.sel = +d.opt; $$('#ls-grid .ls-card').forEach((x) => x.classList.toggle('on', x === b)); renderTweak(); if (matchMedia('(max-width: 860px)').matches) $('#ls-tweak').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    if (d.ttab) { S.ttab = d.ttab; renderTweak(); }
     if (d.t && b.closest('#ls-tweak')) tweak(d.t, d.v);
     if (d.lsdl) download(d.lsdl);
   });
@@ -189,21 +200,22 @@ export function initLogoStudio() {
     if (t.dataset.pref) S.prefs[t.dataset.pref] = +t.value;
     if (t.id === 'ls-name') S.name = t.value;
     if (t.id === 'ls-idea') S.idea = t.value;
-    if (t.dataset.t && t.closest('#ls-tweak') && t.tagName === 'INPUT') tweak(t.dataset.t, t.value);
+    if (t.dataset.t && t.closest('#ls-tweak') && t.tagName === 'INPUT' && t.type !== 'checkbox') tweak(t.dataset.t, t.value);
   });
   dlg.addEventListener('change', (e) => {
     const t = e.target;
     if (t.id === 'ls-custom') { S.colors = [...S.colors, t.value].slice(-2); renderMake(); }
     if (t.dataset.t && t.tagName === 'SELECT') tweak(t.dataset.t, t.value);
+    if (t.dataset.t === 'style') tweak('style');
   });
   $('#ls-go').onclick = () => { S.name = $('#ls-name').value.trim(); makeOptions(); };
   $('#ls-regen').onclick = () => makeOptions();
-  $('#ls-back').onclick = () => { $('#ls-results').hidden = true; $('#ls-make').hidden = false; renderMake(); };
+  $('#ls-back').onclick = () => { $('#ls-results').hidden = true; $('#ls-make').hidden = false; $('#ls-tabs').style.visibility = 'visible'; renderMake(); };
   $('#ls-more').onclick = async () => {
     const base = S.options[S.sel]; if (!base) return;
     const v = variations(base); await loadFonts(...v.map((x) => x.font));
     S.options = [base, ...v, ...S.options.filter((o, i) => i !== S.sel).slice(0, 1)]; S.sel = 0;
-    $('#ls-res-note').textContent = 'Close variations of the one you picked'; renderGrid(); renderTweak();
+    $('#ls-res-note').textContent = ''; renderGrid(); renderTweak();
   };
   $('#ls-use').onclick = () => { const o = S.options[S.sel]; if (!o) return; S.used = true; dlg.close(); S.onUse?.({ ...o, name: o.name || S.name }); };
   const skip = () => { if (dlg.open) dlg.close(); };

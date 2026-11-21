@@ -162,16 +162,6 @@ async function applyPlan(p, { keepUploaded = $('#use-logo').checked } = {}) {
 }
 
 // ---------- AI designer ----------
-const EXAMPLES = [
-  "Homemade mango pickle called 'Amma ka Achaar' — traditional, warm, a bit premium",
-  'Cold brew coffee in a can for college students — bold and modern',
-  'Kids mango ice cream tub — fun, bright, playful',
-  'Organic tulsi green tea — calm, natural, herbal',
-  'Diwali mithai gift box — festive and royal, maroon and gold',
-  "हल्दीराम जैसा नमकीन ब्रांड 'चटपटा' — desi and colourful",
-];
-$('#examples').innerHTML = EXAMPLES.map((e) => `<button class="ex" data-ex="${e.replace(/"/g, '&quot;')}">${e}</button>`).join('');
-$('#examples').onclick = (e) => { const ex = e.target.closest('[data-ex]')?.dataset.ex; if (ex) { $('#brief').value = ex; generate(); } };
 $('#new-btn').onclick = () => openWizard();
 
 // voice
@@ -289,7 +279,7 @@ $('#chat-form').onsubmit = async (e) => {
 
 // ---------- inputs ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-$('#font-display').innerHTML = $('#font-body').innerHTML = Object.entries(FONTS).map(([f, v]) => `<option value="${f}">${f} — ${v.label}</option>`).join('');
+$('#font-display').innerHTML = $('#font-body').innerHTML = Object.keys(FONTS).map((f) => `<option value="${f}">${f}</option>`).join('');
 $('#patterns').innerHTML = Object.entries(PATTERNS).map(([k, v]) => `<button data-pattern="${k}">${v}</button>`).join('');
 $('#borders').innerHTML = Object.entries(BORDERS).filter(([k]) => k !== 'image').map(([k, v]) => `<button data-border="${k}" title="${v}"><canvas width="128" height="168"></canvas><span>${v}</span></button>`).join('');
 let tileKey = '';
@@ -314,16 +304,15 @@ function syncInputs() {
   $('#corners-row').hidden = !CORNER_OK.includes(b.border.type); $('#border-corners').checked = !!b.border.corners;
   $('#border-inset').value = b.border.inset ?? 0.045; $('#bi-v').textContent = `${Math.round((b.border.inset ?? 0.045) * 100)}`;
   renderBorderTiles();
-  $('#logo-tip').textContent = b.logoSource === 'upload' ? 'Using your uploaded logo.' : state.logoLocked ? 'Your logo from Logo Studio — tap Logo Studio to edit it.' : 'A simple name logo for now. Open Logo Studio to design a real one.';
   $('#dl-logo-svg').hidden = b.logoSource !== 'spec';
   $('#logo-scale').value = b.logoScale; $('#ls-v').textContent = `${Math.round(b.logoScale * 100)}%`;
   $('#logo-y').value = b.logoY; $('#ly-v').textContent = Math.abs(b.logoY) < 0.01 ? 'centre' : b.logoY < 0 ? 'higher' : 'lower';
   $('#logo-plate').checked = b.logoPlate;
   $('#pattern-op').value = b.pattern.opacity; $('#po-v').textContent = `${Math.round(b.pattern.opacity * 100)}%`;
   $('#border-size').value = b.border.size; $('#bs-v').textContent = `${Math.round(b.border.size * 100)}`;
-  $('#art-state').textContent = b.artwork ? 'Using your artwork' : 'Auto-designed label';
+  $('#art-state').textContent = b.artwork ? '· using your artwork' : '';
   $('#clear-art').hidden = !b.artwork;
-  $('#use-logo').disabled = !b.uploadedLogo; $('.check:has(#use-logo)')?.classList.toggle('dim', !b.uploadedLogo);
+  $('#use-logo-row').hidden = !b.uploadedLogo;
   renderDims();
 }
 
@@ -406,7 +395,6 @@ function lockLogo(spec) {
   $('#use-logo').checked = false; syncInputs(); rebuild(true);
 }
 $('#ai-logo').onclick = () => openLogoStudio({ name: state.brand.name, brief: $('#brief').value, colors: [state.brand.accent], spec: state.logoLocked ? { ...state.brand.logoSpec, name: state.brand.name } : null, onUse: lockLogo, ai: () => aiMode !== 'local' });
-$('#load-dsert').onclick = () => loadDsert();
 $('#pattern-file').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; state.brand.pattern = { type: 'image', opacity: 0.35, image: await fileToImage(f) }; e.target.value = ''; syncInputs(); rebuild(true); });
 $('#border-file').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; state.brand.border = { ...state.brand.border, type: 'image', image: await fileToImage(f) }; e.target.value = ''; syncInputs(); rebuild(true); });
 $('#art-file').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; state.brand.artwork = await fileToImage(f); e.target.value = ''; syncInputs(); rebuild(true); });
@@ -459,7 +447,19 @@ const IDEAS = [
   ['Kids mango ice cream', 'Scoopy'],
   ['Diwali mithai gift box', 'Shubh Mithai'],
 ];
-const wz = { product: '', vibes: [], colors: [], logo: null, choice: 'make' };
+const wz = { product: '', vibes: [], colors: [], logo: null, choice: null };
+let wzPage = 1;
+function wzShow(n) {
+  wzPage = Math.max(1, Math.min(3, n));
+  $$('.wz-page').forEach((p) => { p.hidden = +p.dataset.page !== wzPage; });
+  $$('.wz-dots i').forEach((d, i) => d.classList.toggle('on', i < wzPage));
+  $('#wz-back').style.visibility = wzPage > 1 ? 'visible' : 'hidden';
+  const go = $('#wz-go');
+  go.textContent = wzPage < 3 ? 'Next' : wz.choice === 'make' ? '✦ Design my logo' : '✦ Design my packaging';
+  go.disabled = wzPage === 1 && !(wz.choice && (wz.choice !== 'upload' || wz.logo));
+  go.style.visibility = wzPage === 1 && go.disabled ? 'hidden' : 'visible';
+  if (wzPage === 2) setTimeout(() => $('#wz-what').focus(), 60);
+}
 function renderWizard() {
   $('#wz-vibe').innerHTML = VIBES.map((v) => `<button type="button" data-wv="${v}" class="${wz.vibes.includes(v) ? 'on' : ''}">${v}</button>`).join('');
   $('#wz-colors').innerHTML = `<button type="button" class="wz-auto ${wz.colors.length ? '' : 'on'}" data-wc="">✦ Let AI pick</button>`
@@ -470,14 +470,13 @@ function renderWizard() {
   $('#wz-ref-list').innerHTML = state.refs.map((r, i) => `<span class="ref"><img src="${r.data}" alt="" /><button type="button" data-rmref="${i}" aria-label="Remove">✕</button></span>`).join('');
   $$('#wz-lchoice [data-wl]').forEach((b) => b.classList.toggle('on', b.dataset.wl === wz.choice));
   $('#wz-logo-drop').hidden = wz.choice !== 'upload';
-  $('#wz-go').textContent = wz.choice === 'make' ? '✦ Next: design my logo' : '✦ Design my packaging';
-  $('#wz-ideas').innerHTML = '<small>Need an idea?</small>' + IDEAS.map(([w, n], i) => `<button type="button" class="ex" data-idea="${i}">${w}</button>`).join('');
+  $('#wz-ideas').innerHTML = '<small>Try</small>' + IDEAS.map(([w, n], i) => `<button type="button" class="ex" data-idea="${i}">${w}</button>`).join('');
 }
-function openWizard() { renderWizard(); $('#start').showModal(); setTimeout(() => $('#wz-what').focus(), 50); }
+function openWizard() { renderWizard(); wzShow(1); $('#start').showModal(); }
 $('#wizard').addEventListener('click', (e) => {
   const t = e.target.closest('button'); if (!t) return;
   const d = t.dataset;
-  if (d.wl) { wz.choice = d.wl; renderWizard(); }
+  if (d.wl) { wz.choice = d.wl; renderWizard(); if (d.wl === 'upload') { if (!wz.logo) $('#wz-logo').click(); wzShow(1); } else wzShow(2); }
   if (d.wp !== undefined) { wz.product = d.wp; renderWizard(); }
   if (d.wv) { wz.vibes = wz.vibes.includes(d.wv) ? wz.vibes.filter((v) => v !== d.wv) : [...wz.vibes, d.wv].slice(-3); renderWizard(); }
   if (d.wc !== undefined) { if (!d.wc) wz.colors = []; else wz.colors = wz.colors.includes(d.wc) ? wz.colors.filter((c) => c !== d.wc) : [...wz.colors, d.wc].slice(-2); renderWizard(); }
@@ -489,9 +488,11 @@ $('#wz-refs').addEventListener('change', async (e) => { for (const f of [...e.ta
 $('#wz-logo').addEventListener('change', async (e) => {
   const f = e.target.files[0]; if (!f) return;
   wz.logo = await fileToImage(f);
-  $('#wz-logo-txt').innerHTML = `<img src="${wz.logo.src}" alt="" /><small>Logo added ✓ — tap to change</small>`;
+  $('#wz-logo-txt').innerHTML = `<img src="${wz.logo.src}" alt="" /><small>Tap to change</small>`;
+  wzShow(2);
 });
-$('#wz-close').onclick = $('#wz-skip').onclick = () => $('#start').close();
+$('#wz-close').onclick = () => $('#start').close();
+$('#wz-back').onclick = () => wzShow(wzPage - 1);
 if (SR) {
   const rec = new SR(); rec.lang = 'en-IN'; rec.interimResults = true; let base = '';
   $('#wz-mic').hidden = false;
@@ -502,7 +503,9 @@ if (SR) {
 $('#wizard').addEventListener('submit', async (e) => {
   e.preventDefault();
   const what = $('#wz-what').value.trim(), name = $('#wz-name').value.trim();
-  if (!what) { $('#wz-what').focus(); $('#wz-what').classList.add('shake'); setTimeout(() => $('#wz-what').classList.remove('shake'), 500); return; }
+  if (wzPage === 1) { if (!$('#wz-go').disabled) wzShow(2); return; }
+  if (wzPage === 2 && what) { wzShow(3); return; }
+  if (!what) { wzShow(2); $('#wz-what').focus(); $('#wz-what').classList.add('shake'); setTimeout(() => $('#wz-what').classList.remove('shake'), 500); return; }
   const brief = [
     what,
     name ? `Brand name: "${name}".` : 'No brand name yet — suggest one.',
@@ -520,7 +523,7 @@ $('#wizard').addEventListener('submit', async (e) => {
   // no logo yet: design it first, then the packaging is built around it
   openLogoStudio({
     name, brief: what, colors: wz.colors, vibes: wz.vibes, ai: () => aiMode !== 'local',
-    onUse: (spec) => { state.logoLocked = true; state.brand.logoSpec = spec; toCreate(); generate({ brief: brief.replace(/No brand name yet — suggest one\./, `Brand name: "${spec.name}".`), name: spec.name, product: wz.product, colors: wz.colors.length ? wz.colors : [spec.colors.primary, spec.colors.secondary] }); },
+    onUse: (spec) => { state.logoLocked = true; state.brand.logoSpec = spec; state.brand.name = spec.name; state.brand.logoSource = 'spec'; refreshLogo(); toCreate(); generate({ brief: brief.replace(/No brand name yet — suggest one\./, `Brand name: "${spec.name}".`), name: spec.name, product: wz.product, colors: wz.colors.length ? wz.colors : [spec.colors.primary, spec.colors.secondary] }); },
     onSkip: (nm) => { state.logoLocked = false; state.brand.logoSpec = null; toCreate(); generate({ brief, name: nm || name, product: wz.product, colors: wz.colors }); },
   });
 });

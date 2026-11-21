@@ -24,25 +24,23 @@
     <aside class="panel left">
       <!-- CREATE -->
       <section data-panel="create">
-        <h3>Describe your product <small id="ai-status"></small></h3>
+        <h3>Your product <small id="ai-status"></small></h3>
         <div class="brief">
-          <textarea id="brief" rows="4" placeholder="e.g. Homemade mango pickle called 'Amma ka Achaar'. Traditional, warm, a little premium."></textarea>
+          <textarea id="brief" rows="3" placeholder="What are you selling?"></textarea>
           <button id="mic" class="mic" title="Speak" aria-label="Speak your idea" hidden>🎙</button>
         </div>
         <div class="refs">
           <div id="ref-list" class="ref-list"></div>
-          <label class="ref-add" title="Add reference pictures (mood only)"><input id="ref-file" type="file" accept="image/*" multiple hidden />＋ Reference</label>
-          <label class="check"><input id="use-logo" type="checkbox" /><span>Use my uploaded logo</span></label>
+          <label class="ref-add" title="Photos for mood only — never copied"><input id="ref-file" type="file" accept="image/*" multiple hidden />＋ Mood photo</label>
         </div>
         <button id="generate" class="primary wide">✦ Design 3 concepts</button>
-        <div class="examples" id="examples"></div>
 
         <div id="concepts" class="concepts" hidden></div>
 
         <div id="chat" class="chat" hidden>
-          <h3>Refine <small>or ask "why…?"</small></h3>
+          <h3>Refine</h3>
           <div id="chat-log" class="chat-log"></div>
-          <form id="chat-form" class="chat-form"><input id="chat-input" placeholder="make it more modern · use green · why this font?" autocomplete="off" /><button class="primary small">→</button></form>
+          <form id="chat-form" class="chat-form"><input id="chat-input" placeholder="e.g. more modern · why this font?" autocomplete="off" /><button class="primary small">→</button></form>
         </div>
       </section>
 
@@ -69,19 +67,18 @@
         <div class="logo-row">
           <canvas id="logo-preview" width="120" height="120"></canvas>
           <div class="logo-actions">
-            <label class="ghost small file">Upload logo<input id="logo-file" type="file" accept="image/*" hidden /></label>
-            <button id="ai-logo" class="ghost small">✦ Logo Studio</button>
-            <button id="load-dsert" class="link small">Load D-SERT sample</button>
+            <button id="ai-logo" class="primary small">✦ Edit in Logo Studio</button>
+            <label class="ghost small file">Upload my logo<input id="logo-file" type="file" accept="image/*" hidden /></label>
           </div>
         </div>
-        <p class="tip" id="logo-tip"></p>
+        <label class="check" id="use-logo-row" hidden><input id="use-logo" type="checkbox" /><span>Use my uploaded logo</span></label>
         <label class="slider"><span>Logo size<b id="ls-v">100%</b></span><input id="logo-scale" type="range" min="0.5" max="1.4" step="0.01" value="1" /></label>
         <label class="slider"><span>Logo position<b id="ly-v">centre</b></span><input id="logo-y" type="range" min="-0.15" max="0.15" step="0.01" value="0" /></label>
-        <label class="check"><input id="logo-plate" type="checkbox" /><span>Badge behind logo</span></label>
+        <label class="check"><input id="logo-plate" type="checkbox" /><span>Circle behind logo</span></label>
 
         <h3>Text</h3>
         <div class="fields">
-          <label><span>Name <em>(Hindi works too)</em></span><input id="f-name" /></label>
+          <label><span>Name</span><input id="f-name" /></label>
           <label><span>Tagline</span><input id="f-tagline" /></label>
           <label><span>Detail</span><input id="f-detail" placeholder="e.g. Net wt. 250 g" /></label>
         </div>
@@ -104,7 +101,7 @@
         <div class="chips patterns" id="patterns"></div>
         <div class="row">
           <label class="slider grow"><span>Strength<b id="po-v"></b></span><input id="pattern-op" type="range" min="0.04" max="0.7" step="0.01" /></label>
-          <label class="ghost small file">Upload<input id="pattern-file" type="file" accept="image/*" hidden /></label>
+
         </div>
 
         <h3>Border</h3>
@@ -115,13 +112,15 @@
           <label class="slider"><span>Distance from edge<b id="bi-v"></b></span><input id="border-inset" type="range" min="0.01" max="0.1" step="0.005" /></label>
           <label class="check" id="corners-row"><input id="border-corners" type="checkbox" /><span>Corners only</span></label>
         </div>
-        <div class="row"><label class="ghost small file">Upload your own border<input id="border-file" type="file" accept="image/*" hidden /></label></div>
-        <p class="tip">Uploaded borders use 9-slice scaling — corners keep their shape, only the edges stretch.</p>
 
-        <div class="artwork">
-          <p><b id="art-state"></b><br /><small>Designers: download the template, place your artwork on it, upload it back.</small></p>
-          <div class="row"><button id="template" class="ghost small">Template ↓</button><label class="ghost small file">Upload artwork<input id="art-file" type="file" accept="image/*" hidden /></label><button id="clear-art" class="link small" hidden>Reset</button></div>
-        </div>
+        <details class="artwork">
+          <summary>For designers <small id="art-state"></small></summary>
+          <div class="row">
+            <label class="ghost small file">Own pattern<input id="pattern-file" type="file" accept="image/*" hidden /></label>
+            <label class="ghost small file">Own border<input id="border-file" type="file" accept="image/*" hidden /></label>
+          </div>
+          <div class="row"><button id="template" class="ghost small">Label template ↓</button><label class="ghost small file">Upload artwork<input id="art-file" type="file" accept="image/*" hidden /></label><button id="clear-art" class="link small" hidden>Reset</button></div>
+        </details>
       </section>
     </aside>
 
@@ -201,58 +200,45 @@
 
 
   <dialog id="start">
-    <form class="wizard" id="wizard">
-      <div class="wz-head">
-        <div><b>Let's design your brand</b><p>Tell us a little. No logo or design skills needed — Wrapt designs your logo and packaging, and you can tweak everything after.</p></div>
+    <form id="wizard" class="wizard">
+      <div class="wz-top">
+        <button type="button" class="wz-back" id="wz-back" aria-label="Back">←</button>
+        <div class="wz-dots"><i class="on"></i><i></i><i></i></div>
         <button type="button" class="close" id="wz-close" aria-label="Close">✕</button>
       </div>
 
-      <div class="wz-step">
-        <label class="wz-q"><i>1</i>Do you have a logo?</label>
+      <section class="wz-page" data-page="1">
+        <h2>Do you have a logo?</h2>
         <div class="wz-logo-choice" id="wz-lchoice">
-          <button type="button" data-wl="upload"><b>Yes, I have one</b><small>Upload it — we design the packaging around it</small></button>
-          <button type="button" data-wl="make" class="on"><b>No, help me make one</b><small>Draw your idea or describe it — we design it first</small></button>
-          <button type="button" data-wl="name"><b>Just use my brand name</b><small>A clean name-only logo for now</small></button>
+          <button type="button" data-wl="upload"><span class="ico">⤒</span><b>Yes</b><small>Upload it</small></button>
+          <button type="button" data-wl="make"><span class="ico">✎</span><b>No, make one</b><small>Draw or describe it</small></button>
+          <button type="button" data-wl="name"><span class="ico">Aa</span><b>Just my name</b><small>Simple and clean</small></button>
         </div>
-        <label class="wz-drop" id="wz-logo-drop" hidden><input id="wz-logo" type="file" accept="image/*" hidden /><span id="wz-logo-txt">＋ Upload your logo<br /><small>PNG with a transparent background works best.</small></span></label>
-      </div>
+        <label class="wz-drop" id="wz-logo-drop" hidden><input id="wz-logo" type="file" accept="image/*" hidden /><span id="wz-logo-txt">＋ Choose your logo file</span></label>
+      </section>
 
-      <div class="wz-step">
-        <label class="wz-q"><i>2</i>What are you selling?</label>
-        <div class="brief"><textarea id="wz-what" rows="3" placeholder="e.g. Homemade mango pickle made with my mom's recipe, for gifting and online orders"></textarea><button type="button" id="wz-mic" class="mic" aria-label="Speak" hidden>🎙</button></div>
-        <div class="wz-row">
-          <label class="wz-field"><span>Brand name <em>optional — leave empty and we'll suggest one</em></span><input id="wz-name" placeholder="e.g. Amma ka Achaar  /  अम्मा का अचार" /></label>
-        </div>
+      <section class="wz-page" data-page="2" hidden>
+        <h2>What are you selling?</h2>
+        <div class="brief"><textarea id="wz-what" rows="3" placeholder="e.g. Homemade mango pickle from my mom's recipe"></textarea><button type="button" id="wz-mic" class="mic" aria-label="Speak" hidden>🎙</button></div>
+        <input id="wz-name" class="wz-input" placeholder="Brand name (optional)" />
         <div class="wz-ideas" id="wz-ideas"></div>
-      </div>
+      </section>
 
-      <div class="wz-step">
-        <label class="wz-q"><i>3</i>What kind of packaging?</label>
-        <div class="chips" id="wz-product">
-          <button type="button" data-wp="" class="on">✦ Let AI choose</button><button type="button" data-wp="can">Can</button><button type="button" data-wp="box">Box</button><button type="button" data-wp="tub">Tub</button><button type="button" data-wp="jar">Jar</button><button type="button" data-wp="pouch">Pouch</button>
+      <section class="wz-page" data-page="3" hidden>
+        <h2>Make it yours <em>all optional</em></h2>
+        <div class="wz-field"><span>Packaging</span>
+          <div class="chips" id="wz-product">
+            <button type="button" data-wp="" class="on">✦ Let AI choose</button><button type="button" data-wp="can">Can</button><button type="button" data-wp="box">Box</button><button type="button" data-wp="tub">Tub</button><button type="button" data-wp="jar">Jar</button><button type="button" data-wp="pouch">Pouch</button>
+          </div>
         </div>
-      </div>
+        <div class="wz-field"><span>Feel <em>up to 3</em></span><div class="chips" id="wz-vibe"></div></div>
+        <div class="wz-field"><span>Colours <em>up to 2</em></span><div class="wz-colors" id="wz-colors"></div></div>
+        <div class="wz-field"><span>Mood photos <em>up to 3 · never copied</em></span>
+          <div class="wz-refrow"><div class="ref-list" id="wz-ref-list"></div><label class="ref-add"><input id="wz-refs" type="file" accept="image/*" multiple hidden />＋ Add</label></div>
+        </div>
+      </section>
 
-      <div class="wz-step">
-        <label class="wz-q"><i>4</i>How should it feel? <em>pick up to 3</em></label>
-        <div class="chips" id="wz-vibe"></div>
-      </div>
-
-      <div class="wz-step">
-        <label class="wz-q"><i>5</i>Colours <em>optional</em></label>
-        <div class="wz-colors" id="wz-colors"></div>
-      </div>
-
-      <div class="wz-step">
-        <label class="wz-q"><i>6</i>Reference pictures <em>optional</em></label>
-        <label class="wz-drop"><input id="wz-refs" type="file" accept="image/*" multiple hidden /><span>＋ Add up to 3<br /><small>Packaging or moods you like — we take the feel, never copy.</small></span></label>
-        <div class="ref-list" id="wz-ref-list"></div>
-      </div>
-
-      <div class="wz-foot">
-        <button type="button" class="link" id="wz-skip">Just explore the studio</button>
-        <button class="primary big" id="wz-go">✦ Next: design my logo</button>
-      </div>
+      <div class="wz-foot"><button class="primary big" id="wz-go">Next</button></div>
     </form>
   </dialog>
 
@@ -260,54 +246,57 @@
   <dialog id="lstudio">
     <div class="ls-wrap">
       <div class="ls-head">
-        <div><b>Logo Studio</b><p>Draw your idea or describe it — Wrapt turns it into a clean logo you can actually use.</p></div>
+        <b>Your logo</b>
+        <div class="ls-tabs" id="ls-tabs"><button type="button" data-lstab="describe" class="on">Describe</button><button type="button" data-lstab="draw">Draw</button></div>
         <button type="button" class="close" id="ls-close" aria-label="Close">✕</button>
       </div>
       <section id="ls-make">
-        <label class="wz-field"><span>Brand name <em id="ls-name-hint"></em></span><input id="ls-name" placeholder="e.g. Picasso" /></label>
-        <div class="ls-tabs"><button type="button" data-lstab="describe" class="on">✎ Describe it</button><button type="button" data-lstab="draw">✍ Draw it</button></div>
+        <input id="ls-name" class="wz-input ls-name" placeholder="Brand name" />
         <div id="ls-describe">
-          <label class="wz-q">What kind of logo?</label>
           <div class="ls-types" id="ls-types"></div>
-          <label class="wz-q">Shape <em>optional</em></label>
-          <div class="chips" id="ls-shapes"></div>
-          <label class="wz-q">Personality</label>
-          <div class="ls-sliders" id="ls-sliders"></div>
-          <label class="wz-q">Colours <em>optional</em></label>
-          <div class="wz-colors" id="ls-colors"></div>
-          <label class="wz-field"><span>Any symbol or idea in mind? <em>optional</em></span><input id="ls-idea" placeholder="e.g. a flame, waves, my grandmother's kitchen" /></label>
+          <details class="ls-more">
+            <summary>More options</summary>
+            <div class="ls-more-body">
+              <div class="wz-field"><span>Shape</span><div class="chips" id="ls-shapes"></div></div>
+              <div class="wz-field"><span>Personality</span><div class="ls-sliders" id="ls-sliders"></div></div>
+              <div class="wz-field"><span>Colours</span><div class="wz-colors" id="ls-colors"></div></div>
+              <div class="wz-field"><span>A symbol in mind?</span><input id="ls-idea" class="wz-input" placeholder="e.g. a flame, waves" /></div>
+            </div>
+          </details>
         </div>
         <div id="ls-draw" hidden>
           <div class="ls-drawrow">
             <div class="ls-padbox">
               <canvas id="ls-pad"></canvas>
               <div class="ls-tools">
-                <button type="button" data-pen="0.012" title="Thin pen"><i style="--s:3px"></i></button>
-                <button type="button" data-pen="0.022" class="on" title="Medium pen"><i style="--s:6px"></i></button>
-                <button type="button" data-pen="0.04" title="Thick pen"><i style="--s:10px"></i></button>
-                <button type="button" data-tool="eraser" title="Eraser — touch a line to remove it">⌫</button>
-                <button type="button" data-sact="mirror" title="Mirror: draw one side, get both">◧ Mirror</button>
+                <button type="button" data-pen="0.012" title="Thin"><i style="--s:3px"></i></button>
+                <button type="button" data-pen="0.022" class="on" title="Medium"><i style="--s:6px"></i></button>
+                <button type="button" data-pen="0.04" title="Thick"><i style="--s:10px"></i></button>
+                <button type="button" data-tool="eraser" title="Eraser">⌫</button>
+                <button type="button" data-sact="mirror" title="Mirror both sides">◧</button>
                 <button type="button" data-sact="undo" title="Undo">↶</button>
-                <button type="button" data-sact="clear" title="Clear">Clear</button>
+                <button type="button" data-sact="clear" title="Clear">✕</button>
               </div>
             </div>
             <div class="ls-drawside">
-              <p class="tip">Draw a simple symbol — a leaf, a letter, a flame, a shape. Wobbly is fine: circles and lines snap into place and curves get smoothed. Works with a finger, trackpad, mouse or pencil.</p>
+              <p class="ls-hint">Draw a simple symbol. Wobbly is fine — we tidy it up.</p>
               <div id="ls-refined" class="ls-refined"></div>
             </div>
           </div>
         </div>
-        <div class="ls-foot"><button type="button" class="link" id="ls-skip">Skip — just use my brand name</button><button type="button" class="primary big" id="ls-go">✦ Show me 6 logos</button></div>
+        <div class="ls-foot"><button type="button" class="link" id="ls-skip">Skip</button><button type="button" class="primary big" id="ls-go">✦ Show me logos</button></div>
       </section>
       <section id="ls-results" hidden>
-        <div class="ls-res-head"><button type="button" class="ghost small" id="ls-back">← Change answers</button><span id="ls-res-note"></span><button type="button" class="ghost small" id="ls-regen">↻ 6 new ideas</button></div>
         <div class="ls-body">
-          <div class="ls-grid" id="ls-grid"></div>
+          <div class="ls-left">
+            <div class="ls-res-head"><button type="button" class="link" id="ls-back">← Back</button><span id="ls-res-note"></span><button type="button" class="link" id="ls-regen">↻ New ideas</button></div>
+            <div class="ls-grid" id="ls-grid"></div>
+          </div>
           <div class="ls-tweak" id="ls-tweak"></div>
         </div>
         <div class="ls-foot">
-          <div class="ls-dl"><span>Download:</span><button type="button" class="link" data-lsdl="png">PNG</button><button type="button" class="link" data-lsdl="svg">SVG</button><button type="button" class="link" data-lsdl="mono">Black</button></div>
-          <div class="ls-acts"><button type="button" class="ghost" id="ls-more">↻ More like this</button><button type="button" class="primary big" id="ls-use">✓ Use this logo</button></div>
+          <button type="button" class="ghost" id="ls-more">More like this</button>
+          <button type="button" class="primary big" id="ls-use">Use this logo →</button>
         </div>
       </section>
     </div>

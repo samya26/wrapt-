@@ -62,7 +62,7 @@ export const CATEGORIES = {
   sweets: { words: ['mithai', 'sweet', 'laddoo', 'ladoo', 'barfi', 'diwali'], glyphs: ['diya', 'lotus', 'cupcake', 'spark'], sub: 'SWEETS' },
   drink: { words: ['juice', 'soda', 'kombucha', 'drink', 'lemonade', 'beverage', 'water'], glyphs: ['citrus', 'drop', 'wave', 'sun'], sub: 'DRINKS' },
   dairy: { words: ['milk', 'ghee', 'paneer', 'curd', 'dairy', 'butter', 'yogurt'], glyphs: ['drop', 'sun', 'sprout', 'wave'], sub: 'DAIRY' },
-  skincare: { words: ['skincare', 'skin', 'serum', 'soap', 'cream', 'beauty', 'cosmetic', 'oil', 'balm', 'ayurved'], glyphs: ['drop', 'leaf', 'lotus', 'moon', 'spark'], sub: 'SKINCARE' },
+  skincare: { words: ['skincare', 'skin', 'nail', 'makeup', 'lipstick', 'lip ', 'kajal', 'hair', 'perfume', 'serum', 'soap', 'cream', 'beauty', 'cosmetic', 'oil', 'balm', 'ayurved'], glyphs: ['drop', 'leaf', 'lotus', 'moon', 'spark'], sub: 'BEAUTY' },
   fashion: { words: ['cloth', 'apparel', 'fashion', 'tshirt', 't-shirt', 'saree', 'kurta', 'wear', 'shoe', 'sneaker', 'tailor'], glyphs: ['needle', 'button', 'arch', 'spark'], sub: 'STUDIO' },
   jewellery: { words: ['jewel', 'jewelry', 'jewellery', 'earring', 'ring', 'necklace', 'silver', 'gold'], glyphs: ['gem', 'spark', 'moon', 'lotus'], sub: 'JEWELLERY' },
   pets: { words: ['pet', 'dog', 'cat', 'puppy'], glyphs: ['paw', 'dot', 'sun'], sub: 'PETS' },
