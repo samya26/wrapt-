@@ -143,6 +143,7 @@ const EXAMPLES = [
 ];
 $('#examples').innerHTML = EXAMPLES.map((e) => `<button class="ex" data-ex="${e.replace(/"/g, '&quot;')}">${e}</button>`).join('');
 $('#examples').onclick = (e) => { const ex = e.target.closest('[data-ex]')?.dataset.ex; if (ex) { $('#brief').value = ex; generate(); } };
+$('#new-btn').onclick = () => openWizard();
 
 // voice
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -176,11 +177,12 @@ let aiMode = 'unknown';
 function setAiStatus() { $('#ai-status').textContent = aiMode === 'ai' ? '● AI connected' : aiMode === 'local' ? '● built-in designer' : ''; $('#ai-status').className = aiMode; }
 fetch('/api/design').then((r) => r.json()).then((j) => { aiMode = j.ok ? 'ai' : 'local'; setAiStatus(); }).catch(() => { aiMode = 'local'; setAiStatus(); });
 
-async function generate() {
-  const brief = $('#brief').value.trim();
+async function generate(opts = {}) {
+  const brief = (opts.brief ?? $('#brief').value).trim();
   if (!brief) { $('#brief').focus(); toast('Tell Wrapt about your product first'); return; }
   const btn = $('#generate'); btn.disabled = true; btn.textContent = 'Designing…'; $('#busy').hidden = false;
   const hasLogo = !!state.brand.uploadedLogo && $('#use-logo').checked;
+  const colors = opts.colors || [];
   let plans, note = '';
   if (aiMode !== 'local') {
     const res = await askAI({ mode: 'concepts', brief, images: state.refs.map((r) => r.data), hasLogo });
@@ -188,7 +190,9 @@ async function generate() {
     else { if (res?.unavailable) aiMode = 'local'; else note = `AI had a problem (${res?.error || 'unknown'}) — used the built-in designer.`; }
     setAiStatus();
   }
-  if (!plans) plans = designLocally(brief, { refColors: state.refs[0]?.colors || [], hasLogo });
+  if (!plans) plans = designLocally(brief, { refColors: colors.length ? [colors[0], colors[1] || mix(colors[0], isDark(colors[0]) ? '#f3d9a4' : '#2a1d16', 0.6)] : state.refs[0]?.colors || [], hasLogo });
+  // hard choices from the start screen always win
+  plans = plans.map((p) => normalizePlan({ ...p, ...(opts.name ? { name: opts.name } : {}), ...(opts.product ? { product: opts.product } : {}) }, { hasLogo }));
   state.concepts = plans;
   await renderConcepts();
   await applyPlan(plans[0], { keepUploaded: hasLogo });
@@ -196,9 +200,9 @@ async function generate() {
   btn.disabled = false; btn.textContent = '✦ Design 3 new concepts'; $('#busy').hidden = true;
   $('#chat').hidden = false;
   if (note) chat('bot', note);
-  chat('bot', `Here are 3 directions for <b>${plans[0].name}</b>. Pick one, then tell me what to change — or ask <i>why</i> I chose something.`);
+  chat('bot', `Here are 3 directions for <b>${esc(plans[0].name)}</b>. Pick one, then tell me what to change — or ask <i>why</i> I chose something. Everything is also editable in Product, Design and Look.`);
 }
-$('#generate').onclick = generate;
+$('#generate').onclick = () => generate();
 $('#brief').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generate(); });
 
 // Render each concept in 3D off-screen and show it as a thumbnail.
@@ -387,14 +391,86 @@ $('#dl-video').addEventListener('click', async (e) => {
 
 function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3200); }
 
+// ---------- start screen ----------
+const VIBES = ['Minimal', 'Premium', 'Playful', 'Traditional / desi', 'Natural', 'Bold', 'Luxury', 'Cute', 'Modern', 'Handmade', 'Festive', 'Retro'];
+const SWATCHES = ['#1c1a17', '#f6f1e7', '#6e1423', '#c0392b', '#ec7b2c', '#f2c230', '#2f7d4a', '#1f7a7a', '#2a5ca8', '#6c3b9e', '#ee8fb0', '#c9a35a'];
+const IDEAS = [
+  ['Homemade mango pickle made with my mom\'s recipe', 'Amma ka Achaar'],
+  ['Cold brew coffee in cans for college students', ''],
+  ['Organic tulsi green tea', 'Tulsi Leaf'],
+  ['Handmade soy candles with Indian scents', ''],
+  ['Kids mango ice cream', 'Scoopy'],
+  ['Diwali mithai gift box', 'Shubh Mithai'],
+];
+const wz = { product: '', vibes: [], colors: [], logo: null };
+function renderWizard() {
+  $('#wz-vibe').innerHTML = VIBES.map((v) => `<button type="button" data-wv="${v}" class="${wz.vibes.includes(v) ? 'on' : ''}">${v}</button>`).join('');
+  $('#wz-colors').innerHTML = `<button type="button" class="wz-auto ${wz.colors.length ? '' : 'on'}" data-wc="">✦ Let AI pick</button>`
+    + SWATCHES.map((c) => `<button type="button" class="sw big ${wz.colors.includes(c) ? 'on' : ''}" style="--c:${c}" data-wc="${c}" aria-label="${c}"></button>`).join('')
+    + `<label class="pick"><input type="color" id="wz-custom" value="#d4a06a" /><span>Custom</span></label>`
+    + (wz.colors.length ? `<small class="wz-picked">Picked: ${wz.colors.map((c) => `<i style="background:${c}"></i>`).join('')}</small>` : '');
+  $$('#wz-product [data-wp]').forEach((b) => b.classList.toggle('on', b.dataset.wp === wz.product));
+  $('#wz-ref-list').innerHTML = state.refs.map((r, i) => `<span class="ref"><img src="${r.data}" alt="" /><button type="button" data-rmref="${i}" aria-label="Remove">✕</button></span>`).join('');
+  $('#wz-ideas').innerHTML = '<small>Need an idea?</small>' + IDEAS.map(([w, n], i) => `<button type="button" class="ex" data-idea="${i}">${w}</button>`).join('');
+}
+function openWizard() { renderWizard(); $('#start').showModal(); setTimeout(() => $('#wz-what').focus(), 50); }
+$('#wizard').addEventListener('click', (e) => {
+  const t = e.target.closest('button'); if (!t) return;
+  const d = t.dataset;
+  if (d.wp !== undefined) { wz.product = d.wp; renderWizard(); }
+  if (d.wv) { wz.vibes = wz.vibes.includes(d.wv) ? wz.vibes.filter((v) => v !== d.wv) : [...wz.vibes, d.wv].slice(-3); renderWizard(); }
+  if (d.wc !== undefined) { if (!d.wc) wz.colors = []; else wz.colors = wz.colors.includes(d.wc) ? wz.colors.filter((c) => c !== d.wc) : [...wz.colors, d.wc].slice(-2); renderWizard(); }
+  if (d.rmref != null) { state.refs.splice(+d.rmref, 1); renderWizard(); renderRefs(); }
+  if (d.idea != null) { const [w, n] = IDEAS[+d.idea]; $('#wz-what').value = w; $('#wz-name').value = n; }
+});
+$('#wizard').addEventListener('change', (e) => { if (e.target.id === 'wz-custom') { wz.colors = [...wz.colors, e.target.value].slice(-2); renderWizard(); } });
+$('#wz-refs').addEventListener('change', async (e) => { for (const f of [...e.target.files].slice(0, 3 - state.refs.length)) state.refs.push(await shrinkData(f)); e.target.value = ''; renderWizard(); renderRefs(); });
+$('#wz-logo').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  wz.logo = await fileToImage(f);
+  $('#wz-logo-txt').innerHTML = `<img src="${wz.logo.src}" alt="" /><small>Logo added ✓ — tap to change</small>`;
+});
+$('#wz-close').onclick = $('#wz-skip').onclick = () => $('#start').close();
+if (SR) {
+  const rec = new SR(); rec.lang = 'en-IN'; rec.interimResults = true; let base = '';
+  $('#wz-mic').hidden = false;
+  $('#wz-mic').onclick = () => { if ($('#wz-mic').classList.contains('on')) return rec.stop(); base = $('#wz-what').value ? $('#wz-what').value + ' ' : ''; try { rec.start(); $('#wz-mic').classList.add('on'); } catch (e) {} };
+  rec.onresult = (e) => { $('#wz-what').value = base + [...e.results].map((r) => r[0].transcript).join(''); };
+  rec.onend = rec.onerror = () => $('#wz-mic').classList.remove('on');
+}
+$('#wizard').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const what = $('#wz-what').value.trim(), name = $('#wz-name').value.trim();
+  if (!what) { $('#wz-what').focus(); $('#wz-what').classList.add('shake'); setTimeout(() => $('#wz-what').classList.remove('shake'), 500); return; }
+  const brief = [
+    what,
+    name ? `Brand name: "${name}".` : 'No brand name yet — suggest one.',
+    wz.product ? `Packaging: ${wz.product}.` : '',
+    wz.vibes.length ? `Feel: ${wz.vibes.join(', ').toLowerCase()}.` : '',
+    wz.colors.length ? `Preferred colours: ${wz.colors.join(', ')}.` : '',
+    wz.logo ? 'They already have a logo.' : 'They have no logo — design one.',
+  ].filter(Boolean).join(' ');
+  $('#start').close();
+  if (wz.logo) { await useUploadedLogo(wz.logo, name || undefined); } else { $('#use-logo').checked = false; }
+  $('#brief').value = brief;
+  if (matchMedia('(max-width: 899px)').matches) { $$('[data-tab]').forEach((x) => x.classList.toggle('on', x.dataset.tab === 'create')); document.body.dataset.tab = 'create'; }
+  await generate({ brief, name, product: wz.product, colors: wz.colors });
+});
+
 // ---------- start ----------
 async function loadDsert() {
   const img = await loadImage(BASE + 'samples/dsert.png');
   Object.assign(state.brand, { name: 'D-SERT', tagline: 'Handcrafted desserts', detail: 'Belgian chocolate · 250 g', style: 'classic', fonts: { display: 'DM Serif Display', body: 'Inter' }, pattern: { type: 'none', opacity: 0.18, image: null }, border: { type: 'double', size: 0.06, image: null }, logoScale: 1, logoY: 0 });
   state.plan = null;
   await useUploadedLogo(img);
-  $('#use-logo').checked = false; // a sample, not the user's own logo — let the AI design new ones
+  $('#use-logo').checked = false; // a sample, not the user's own logo
   state.bg = '#efe3d2'; studio.setBackground(state.bg); syncInputs();
 }
 renderRefs();
-document.fonts.ready.then(async () => { await loadFonts('DM Serif Display'); await loadDsert(); current = snap(); history.past = []; updUndo(); });
+document.fonts.ready.then(async () => {
+  // a neutral demo brand sits behind the start screen (made by the built-in designer)
+  const demo = designLocally("Premium masala chai called 'Kesar Chai' — warm, traditional")[0];
+  await applyPlan({ ...demo, product: 'pouch' }, { keepUploaded: false });
+  current = snap(); history.past = []; updUndo();
+  openWizard();
+});

@@ -14,6 +14,7 @@
     <div class="top-actions">
       <button id="undo" class="icon" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶</button>
       <button id="redo" class="icon" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>↷</button>
+      <button id="new-btn" class="ghost">✦ New design</button>
       <button id="how-btn" class="ghost">How it works</button>
       <button id="export-btn" class="primary">Export ↓</button>
     </div>
@@ -195,6 +196,59 @@
       </ol>
       <p class="muted">Built with Three.js and plain JavaScript; the AI runs through a small serverless function (Gemini). Your files never leave your browser except the brief and reference photos you send to the AI.</p>
     </div>
+  </dialog>
+
+
+  <dialog id="start">
+    <form class="wizard" id="wizard">
+      <div class="wz-head">
+        <div><b>Let's design your packaging</b><p>Tell us a little. No logo or design skills needed — Wrapt's AI does the rest, and you can tweak everything after.</p></div>
+        <button type="button" class="close" id="wz-close" aria-label="Close">✕</button>
+      </div>
+
+      <div class="wz-step">
+        <label class="wz-q"><i>1</i>What are you selling?</label>
+        <div class="brief"><textarea id="wz-what" rows="3" placeholder="e.g. Homemade mango pickle made with my mom's recipe, for gifting and online orders"></textarea><button type="button" id="wz-mic" class="mic" aria-label="Speak" hidden>🎙</button></div>
+        <div class="wz-row">
+          <label class="wz-field"><span>Brand name <em>optional — leave empty and we'll suggest one</em></span><input id="wz-name" placeholder="e.g. Amma ka Achaar  /  अम्मा का अचार" /></label>
+        </div>
+        <div class="wz-ideas" id="wz-ideas"></div>
+      </div>
+
+      <div class="wz-step">
+        <label class="wz-q"><i>2</i>What kind of packaging?</label>
+        <div class="chips" id="wz-product">
+          <button type="button" data-wp="" class="on">✦ Let AI choose</button><button type="button" data-wp="can">Can</button><button type="button" data-wp="box">Box</button><button type="button" data-wp="tub">Tub</button><button type="button" data-wp="jar">Jar</button><button type="button" data-wp="pouch">Pouch</button>
+        </div>
+      </div>
+
+      <div class="wz-step">
+        <label class="wz-q"><i>3</i>How should it feel? <em>pick up to 3</em></label>
+        <div class="chips" id="wz-vibe"></div>
+      </div>
+
+      <div class="wz-step">
+        <label class="wz-q"><i>4</i>Colours <em>optional</em></label>
+        <div class="wz-colors" id="wz-colors"></div>
+      </div>
+
+      <div class="wz-step two-col">
+        <div>
+          <label class="wz-q"><i>5</i>Got a logo? <em>optional</em></label>
+          <label class="wz-drop" id="wz-logo-drop"><input id="wz-logo" type="file" accept="image/*" hidden /><span id="wz-logo-txt">＋ Upload your logo<br /><small>No logo? Skip — we'll design one.</small></span></label>
+        </div>
+        <div>
+          <label class="wz-q"><i>6</i>Reference pictures <em>optional</em></label>
+          <label class="wz-drop"><input id="wz-refs" type="file" accept="image/*" multiple hidden /><span>＋ Add up to 3<br /><small>Packaging or moods you like — we take the feel, never copy.</small></span></label>
+          <div class="ref-list" id="wz-ref-list"></div>
+        </div>
+      </div>
+
+      <div class="wz-foot">
+        <button type="button" class="link" id="wz-skip">Just explore the studio</button>
+        <button class="primary big" id="wz-go">✦ Design my packaging</button>
+      </div>
+    </form>
   </dialog>
 
   <div class="dropzone-hint">Drop your logo</div>

@@ -1,7 +1,7 @@
 // The "design plan": a small JSON object that fully describes a packaging design.
 // The AI (or the built-in designer) writes plans; Wrapt's engine draws them.
 // Because a plan is data, not a picture, every result stays editable.
-import { contrast, luminance, mix, isDark, autoInk, readable, averageColor, paper, ink, FONTS, PATTERNS, BORDERS, ICONS, LOGO_SHAPES } from './art.js';
+import { contrast, luminance, mix, isDark, autoInk, readable, averageColor, logoCoverage, paper, ink, FONTS, PATTERNS, BORDERS, ICONS, LOGO_SHAPES } from './art.js';
 
 export const PRODUCTS = ['can', 'box', 'tub', 'jar', 'pouch'];
 export const STYLES = ['classic', 'bold', 'minimal', 'heritage'];
@@ -169,7 +169,8 @@ export function audit(b, product) {
   if (c1 < 4.5) out.push({ level: 'high', msg: `Body text is hard to read (contrast ${c1.toFixed(1)}:1, needs 4.5).`, fix: 'Fix text colour', patch: { ink: autoInk(pap) } });
   const c2 = contrast(b.accent, pap);
   if (c2 < 1.6 && b.style !== 'bold') out.push({ level: 'mid', msg: 'Accent colour almost disappears on the pack.', fix: 'Boost accent', patch: { accent: readable(b.accent, pap, 2.4) } });
-  if (b.logo && !b.logoPlate) {
+  // logos that are mostly solid (round badges etc.) bring their own background, so they can't blend in
+  if (b.logo && !b.logoPlate && b.logoSource !== 'ai' && logoCoverage(b.logo) < 0.5) {
     const lc = contrast(averageColor(b.logo), pap);
     if (lc < 1.5) out.push({ level: 'high', msg: 'Your logo blends into the pack colour.', fix: 'Add a logo badge', patch: { logoPlate: true } });
   }

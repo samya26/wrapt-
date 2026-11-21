@@ -41,6 +41,15 @@ export function extractPalette(img) {
   const accent = cols.slice(1).sort((a, b) => contrast(b, main) - contrast(a, main))[0] || autoInk(main);
   return [main, accent, ...cols.slice(1)];
 }
+// Share of the logo's square that is solid (a badge-style logo carries its own background).
+export function logoCoverage(img) {
+  const c = document.createElement('canvas'); c.width = c.height = 48;
+  const g = c.getContext('2d'); const k = 48 / Math.max(img.width, img.height);
+  g.drawImage(img, (48 - img.width * k) / 2, (48 - img.height * k) / 2, img.width * k, img.height * k);
+  const d = g.getImageData(0, 0, 48, 48).data; let n = 0;
+  for (let i = 3; i < d.length; i += 4) if (d[i] > 200) n++;
+  return n / (48 * 48);
+}
 // Average colour of the visible pixels of an image (used by the design audit).
 export function averageColor(img) {
   const c = document.createElement('canvas'); c.width = c.height = 48;
