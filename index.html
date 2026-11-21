@@ -70,14 +70,11 @@
           <canvas id="logo-preview" width="120" height="120"></canvas>
           <div class="logo-actions">
             <label class="ghost small file">Upload logo<input id="logo-file" type="file" accept="image/*" hidden /></label>
-            <button id="ai-logo" class="ghost small">✦ Make one for me</button>
+            <button id="ai-logo" class="ghost small">✦ Logo Studio</button>
             <button id="load-dsert" class="link small">Load D-SERT sample</button>
           </div>
         </div>
-        <div id="logo-gen" class="sub" hidden>
-          <div class="chips" id="logo-shapes"></div>
-          <div class="chips icons" id="logo-icons"></div>
-        </div>
+        <p class="tip" id="logo-tip"></p>
         <label class="slider"><span>Logo size<b id="ls-v">100%</b></span><input id="logo-scale" type="range" min="0.5" max="1.4" step="0.01" value="1" /></label>
         <label class="slider"><span>Logo position<b id="ly-v">centre</b></span><input id="logo-y" type="range" min="-0.15" max="0.15" step="0.01" value="0" /></label>
         <label class="check"><input id="logo-plate" type="checkbox" /><span>Badge behind logo</span></label>
@@ -111,11 +108,14 @@
         </div>
 
         <h3>Border</h3>
-        <div class="chips" id="borders"></div>
-        <div class="row">
-          <label class="slider grow"><span>Thickness<b id="bs-v"></b></span><input id="border-size" type="range" min="0.03" max="0.14" step="0.005" /></label>
-          <label class="ghost small file">Upload border<input id="border-file" type="file" accept="image/*" hidden /></label>
+        <div class="btiles" id="borders"></div>
+        <div id="border-ctl">
+          <div class="row"><span class="lbl">Colour</span><div class="seg" id="border-col"><button data-bcol="accent">Accent</button><button data-bcol="ink">Ink</button><button data-bcol="gold">Gold foil</button></div></div>
+          <label class="slider"><span>Thickness<b id="bs-v"></b></span><input id="border-size" type="range" min="0.03" max="0.14" step="0.005" /></label>
+          <label class="slider"><span>Distance from edge<b id="bi-v"></b></span><input id="border-inset" type="range" min="0.01" max="0.1" step="0.005" /></label>
+          <label class="check" id="corners-row"><input id="border-corners" type="checkbox" /><span>Corners only</span></label>
         </div>
+        <div class="row"><label class="ghost small file">Upload your own border<input id="border-file" type="file" accept="image/*" hidden /></label></div>
         <p class="tip">Uploaded borders use 9-slice scaling — corners keep their shape, only the edges stretch.</p>
 
         <div class="artwork">
@@ -175,6 +175,7 @@
         <button type="button" id="dl-alpha" class="ghost">Transparent PNG</button>
         <button type="button" id="dl-video" class="ghost">360° video</button>
         <button type="button" id="dl-logo" class="ghost">Logo (PNG)</button>
+        <button type="button" id="dl-logo-svg" class="ghost">Logo (SVG)</button>
       </div>
       <div id="rec-bar" class="bar" hidden><i></i></div>
     </form>
@@ -186,9 +187,9 @@
       <ol>
         <li><b>1 · The design plan</b><p>The AI never paints a picture. It writes a small JSON "design plan" — name, colours, fonts, layout, pattern, border, logo shape and the reasons behind each choice. Wrapt's own engine draws it, so every result stays editable, fast and cheap. Without AI, a built-in rule-based designer writes the plan.</p></li>
         <li><b>2 · Three concepts</b><p>One brief becomes three different directions (e.g. Premium, Minimal, Traditional). Each is rendered in 3D off-screen and shown as a thumbnail so you can compare.</p></li>
-        <li><b>3 · Vector logos</b><p>Logos are drawn with code from simple building blocks — a container shape, a line-art icon, the name set along a curve and a monogram — so they stay crisp at any size.</p></li>
+        <li><b>3 · Logo Studio</b><p>No logo? Draw your idea or describe it. Your sketch is stored as point lists, simplified (Ramer–Douglas–Peucker), wobbly circles and lines are snapped to perfect shapes, and the rest is smoothed into Bézier curves. The AI then writes six logo "recipes" (layout, font, spacing, detail, symbol) — never pictures — and Wrapt draws them as crisp vectors. Quality rules are enforced in code: typography first, symbols must fit the product, no text collisions, every logo tested small and in one colour.</p></li>
         <li><b>4 · Reading colours</b><p>Uploaded logos and reference photos are shrunk to 64×64 pixels and a tiny <i>k-means</i> clustering finds their main colours.</p></li>
-        <li><b>5 · Patterns & borders</b><p>Indian art patterns are drawn as small repeating tiles. Uploaded borders use <i>9-slice scaling</i>: the image is cut into a 3×3 grid; corners are copied as-is and only the edges stretch, so one border fits every panel.</p></li>
+        <li><b>5 · Patterns & borders</b><p>Indian art patterns are drawn as small repeating tiles. All 16 borders are drawn with code, so they fit any panel size. Uploaded borders use <i>9-slice scaling</i>: the image is cut into a 3×3 grid; corners are copied as-is and only the edges stretch, so one border fits every panel.</p></li>
         <li><b>6 · UV mapping</b><p>Every 3D vertex has a (u, v) coordinate saying which pixel of the flat label sits there — that's how a rectangle wraps a can or a dieline lands on six box faces.</p></li>
         <li><b>7 · The fold</b><p>The box is a tree of hinged panels; animating the hinge angles folds the flat dieline into a box.</p></li>
         <li><b>8 · Design check</b><p>An automatic audit measures text contrast (WCAG ratios), whether the logo blends into the pack, logo size on curved surfaces, edge distance and pattern strength — each with a one-click fix.</p></li>
@@ -202,12 +203,22 @@
   <dialog id="start">
     <form class="wizard" id="wizard">
       <div class="wz-head">
-        <div><b>Let's design your packaging</b><p>Tell us a little. No logo or design skills needed — Wrapt's AI does the rest, and you can tweak everything after.</p></div>
+        <div><b>Let's design your brand</b><p>Tell us a little. No logo or design skills needed — Wrapt designs your logo and packaging, and you can tweak everything after.</p></div>
         <button type="button" class="close" id="wz-close" aria-label="Close">✕</button>
       </div>
 
       <div class="wz-step">
-        <label class="wz-q"><i>1</i>What are you selling?</label>
+        <label class="wz-q"><i>1</i>Do you have a logo?</label>
+        <div class="wz-logo-choice" id="wz-lchoice">
+          <button type="button" data-wl="upload"><b>Yes, I have one</b><small>Upload it — we design the packaging around it</small></button>
+          <button type="button" data-wl="make" class="on"><b>No, help me make one</b><small>Draw your idea or describe it — we design it first</small></button>
+          <button type="button" data-wl="name"><b>Just use my brand name</b><small>A clean name-only logo for now</small></button>
+        </div>
+        <label class="wz-drop" id="wz-logo-drop" hidden><input id="wz-logo" type="file" accept="image/*" hidden /><span id="wz-logo-txt">＋ Upload your logo<br /><small>PNG with a transparent background works best.</small></span></label>
+      </div>
+
+      <div class="wz-step">
+        <label class="wz-q"><i>2</i>What are you selling?</label>
         <div class="brief"><textarea id="wz-what" rows="3" placeholder="e.g. Homemade mango pickle made with my mom's recipe, for gifting and online orders"></textarea><button type="button" id="wz-mic" class="mic" aria-label="Speak" hidden>🎙</button></div>
         <div class="wz-row">
           <label class="wz-field"><span>Brand name <em>optional — leave empty and we'll suggest one</em></span><input id="wz-name" placeholder="e.g. Amma ka Achaar  /  अम्मा का अचार" /></label>
@@ -216,41 +227,91 @@
       </div>
 
       <div class="wz-step">
-        <label class="wz-q"><i>2</i>What kind of packaging?</label>
+        <label class="wz-q"><i>3</i>What kind of packaging?</label>
         <div class="chips" id="wz-product">
           <button type="button" data-wp="" class="on">✦ Let AI choose</button><button type="button" data-wp="can">Can</button><button type="button" data-wp="box">Box</button><button type="button" data-wp="tub">Tub</button><button type="button" data-wp="jar">Jar</button><button type="button" data-wp="pouch">Pouch</button>
         </div>
       </div>
 
       <div class="wz-step">
-        <label class="wz-q"><i>3</i>How should it feel? <em>pick up to 3</em></label>
+        <label class="wz-q"><i>4</i>How should it feel? <em>pick up to 3</em></label>
         <div class="chips" id="wz-vibe"></div>
       </div>
 
       <div class="wz-step">
-        <label class="wz-q"><i>4</i>Colours <em>optional</em></label>
+        <label class="wz-q"><i>5</i>Colours <em>optional</em></label>
         <div class="wz-colors" id="wz-colors"></div>
       </div>
 
-      <div class="wz-step two-col">
-        <div>
-          <label class="wz-q"><i>5</i>Got a logo? <em>optional</em></label>
-          <label class="wz-drop" id="wz-logo-drop"><input id="wz-logo" type="file" accept="image/*" hidden /><span id="wz-logo-txt">＋ Upload your logo<br /><small>No logo? Skip — we'll design one.</small></span></label>
-        </div>
-        <div>
-          <label class="wz-q"><i>6</i>Reference pictures <em>optional</em></label>
-          <label class="wz-drop"><input id="wz-refs" type="file" accept="image/*" multiple hidden /><span>＋ Add up to 3<br /><small>Packaging or moods you like — we take the feel, never copy.</small></span></label>
-          <div class="ref-list" id="wz-ref-list"></div>
-        </div>
+      <div class="wz-step">
+        <label class="wz-q"><i>6</i>Reference pictures <em>optional</em></label>
+        <label class="wz-drop"><input id="wz-refs" type="file" accept="image/*" multiple hidden /><span>＋ Add up to 3<br /><small>Packaging or moods you like — we take the feel, never copy.</small></span></label>
+        <div class="ref-list" id="wz-ref-list"></div>
       </div>
 
       <div class="wz-foot">
         <button type="button" class="link" id="wz-skip">Just explore the studio</button>
-        <button class="primary big" id="wz-go">✦ Design my packaging</button>
+        <button class="primary big" id="wz-go">✦ Next: design my logo</button>
       </div>
     </form>
   </dialog>
 
+
+  <dialog id="lstudio">
+    <div class="ls-wrap">
+      <div class="ls-head">
+        <div><b>Logo Studio</b><p>Draw your idea or describe it — Wrapt turns it into a clean logo you can actually use.</p></div>
+        <button type="button" class="close" id="ls-close" aria-label="Close">✕</button>
+      </div>
+      <section id="ls-make">
+        <label class="wz-field"><span>Brand name <em id="ls-name-hint"></em></span><input id="ls-name" placeholder="e.g. Picasso" /></label>
+        <div class="ls-tabs"><button type="button" data-lstab="describe" class="on">✎ Describe it</button><button type="button" data-lstab="draw">✍ Draw it</button></div>
+        <div id="ls-describe">
+          <label class="wz-q">What kind of logo?</label>
+          <div class="ls-types" id="ls-types"></div>
+          <label class="wz-q">Shape <em>optional</em></label>
+          <div class="chips" id="ls-shapes"></div>
+          <label class="wz-q">Personality</label>
+          <div class="ls-sliders" id="ls-sliders"></div>
+          <label class="wz-q">Colours <em>optional</em></label>
+          <div class="wz-colors" id="ls-colors"></div>
+          <label class="wz-field"><span>Any symbol or idea in mind? <em>optional</em></span><input id="ls-idea" placeholder="e.g. a flame, waves, my grandmother's kitchen" /></label>
+        </div>
+        <div id="ls-draw" hidden>
+          <div class="ls-drawrow">
+            <div class="ls-padbox">
+              <canvas id="ls-pad"></canvas>
+              <div class="ls-tools">
+                <button type="button" data-pen="0.012" title="Thin pen"><i style="--s:3px"></i></button>
+                <button type="button" data-pen="0.022" class="on" title="Medium pen"><i style="--s:6px"></i></button>
+                <button type="button" data-pen="0.04" title="Thick pen"><i style="--s:10px"></i></button>
+                <button type="button" data-tool="eraser" title="Eraser — touch a line to remove it">⌫</button>
+                <button type="button" data-sact="mirror" title="Mirror: draw one side, get both">◧ Mirror</button>
+                <button type="button" data-sact="undo" title="Undo">↶</button>
+                <button type="button" data-sact="clear" title="Clear">Clear</button>
+              </div>
+            </div>
+            <div class="ls-drawside">
+              <p class="tip">Draw a simple symbol — a leaf, a letter, a flame, a shape. Wobbly is fine: circles and lines snap into place and curves get smoothed. Works with a finger, trackpad, mouse or pencil.</p>
+              <div id="ls-refined" class="ls-refined"></div>
+            </div>
+          </div>
+        </div>
+        <div class="ls-foot"><button type="button" class="link" id="ls-skip">Skip — just use my brand name</button><button type="button" class="primary big" id="ls-go">✦ Show me 6 logos</button></div>
+      </section>
+      <section id="ls-results" hidden>
+        <div class="ls-res-head"><button type="button" class="ghost small" id="ls-back">← Change answers</button><span id="ls-res-note"></span><button type="button" class="ghost small" id="ls-regen">↻ 6 new ideas</button></div>
+        <div class="ls-body">
+          <div class="ls-grid" id="ls-grid"></div>
+          <div class="ls-tweak" id="ls-tweak"></div>
+        </div>
+        <div class="ls-foot">
+          <div class="ls-dl"><span>Download:</span><button type="button" class="link" data-lsdl="png">PNG</button><button type="button" class="link" data-lsdl="svg">SVG</button><button type="button" class="link" data-lsdl="mono">Black</button></div>
+          <div class="ls-acts"><button type="button" class="ghost" id="ls-more">↻ More like this</button><button type="button" class="primary big" id="ls-use">✓ Use this logo</button></div>
+        </div>
+      </section>
+    </div>
+  </dialog>
   <div class="dropzone-hint">Drop your logo</div>
   <script type="module" src="/src/main.js"></script>
 </body>

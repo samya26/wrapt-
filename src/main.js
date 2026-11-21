@@ -16,10 +16,29 @@ import '@fontsource/mukta/devanagari-400.css';
 import '@fontsource/mukta/devanagari-700.css';
 import '@fontsource/tiro-devanagari-hindi/latin-400.css';
 import '@fontsource/tiro-devanagari-hindi/devanagari-400.css';
+import '@fontsource/fraunces/latin-400.css';
+import '@fontsource/fraunces/latin-700.css';
+import '@fontsource/cormorant-garamond/latin-500.css';
+import '@fontsource/cormorant-garamond/latin-700.css';
+import '@fontsource/marcellus/latin-400.css';
+import '@fontsource/abril-fatface/latin-400.css';
+import '@fontsource/rozha-one/latin-400.css';
+import '@fontsource/young-serif/latin-400.css';
+import '@fontsource/shrikhand/latin-400.css';
+import '@fontsource/baloo-2/latin-500.css';
+import '@fontsource/baloo-2/latin-700.css';
+import '@fontsource/unbounded/latin-400.css';
+import '@fontsource/unbounded/latin-700.css';
+import '@fontsource/bricolage-grotesque/latin-400.css';
+import '@fontsource/bricolage-grotesque/latin-700.css';
+import '@fontsource/syne/latin-500.css';
+import '@fontsource/syne/latin-700.css';
 import './style.css';
 import { Studio } from './studio.js';
 import { BUILDERS, DEFAULTS } from './products.js';
-import { loadImage, extractPalette, templateFor, mix, isDark, makeLogo, loadFonts, FONTS, PATTERNS, BORDERS, ICONS, LOGO_SHAPES } from './art.js';
+import { loadImage, extractPalette, templateFor, mix, isDark, loadFonts, paper, ink, luminance, FONTS, PATTERNS, BORDERS, CORNER_OK, borderType, borderTile } from './art.js';
+import { renderLogo, logoSVG, packColors, designLogos } from './logo.js';
+import { openLogoStudio, initLogoStudio } from './logostudio.js';
 import { designLocally, refineLocally, normalizePlan, audit, askAI } from './design.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -31,14 +50,14 @@ const state = {
   product: 'can',
   dims: structuredClone(DEFAULTS),
   brand: {
-    logo: null, logoSource: 'upload', uploadedLogo: null, logoSpec: { shape: 'badge', icon: 'star', monogram: '' },
+    logo: null, logoSource: 'spec', uploadedLogo: null, logoSpec: null, logoHasName: false,
     name: '', tagline: '', detail: '', pack: '#2a1713', accent: '#d4a06a', ink: null, style: 'classic',
     fonts: { display: 'DM Serif Display', body: 'Inter' },
-    pattern: { type: 'none', opacity: 0.18, image: null }, border: { type: 'double', size: 0.06, image: null },
+    pattern: { type: 'none', opacity: 0.18, image: null }, border: { type: 'double', size: 0.06, inset: 0.045, color: 'accent', corners: false, image: null },
     logoScale: 1, logoY: 0, logoPlate: false, artwork: null,
   },
   palette: [], finish: 'gloss', light: 'studio', bg: '#efe3d2', fold: 1,
-  plan: null, concepts: [], refs: [],
+  plan: null, concepts: [], refs: [], logoLocked: false,
 };
 
 const studio = new Studio($('#stage'));
@@ -47,7 +66,7 @@ window.__studio = studio;
 // ---------- undo / redo ----------
 const history = { past: [], future: [], timer: null };
 const snap = () => ({ product: state.product, dims: structuredClone(state.dims), finish: state.finish, light: state.light, bg: state.bg, plan: state.plan, palette: [...state.palette],
-  brand: { ...state.brand, fonts: { ...state.brand.fonts }, pattern: { ...state.brand.pattern }, border: { ...state.brand.border }, logoSpec: { ...state.brand.logoSpec } } });
+  brand: { ...state.brand, fonts: { ...state.brand.fonts }, pattern: { ...state.brand.pattern }, border: { ...state.brand.border }, logoSpec: state.brand.logoSpec } , logoLocked: state.logoLocked });
 let current = null;
 function commit(now = false) {
   clearTimeout(history.timer);
@@ -56,7 +75,7 @@ function commit(now = false) {
 }
 function restore(s) {
   Object.assign(state, { product: s.product, dims: structuredClone(s.dims), finish: s.finish, light: s.light, bg: s.bg, plan: s.plan, palette: [...s.palette] });
-  state.brand = { ...s.brand, fonts: { ...s.brand.fonts }, pattern: { ...s.brand.pattern }, border: { ...s.brand.border }, logoSpec: { ...s.brand.logoSpec } };
+  state.brand = { ...s.brand, fonts: { ...s.brand.fonts }, pattern: { ...s.brand.pattern }, border: { ...s.brand.border }, logoSpec: s.brand.logoSpec }; state.logoLocked = !!s.logoLocked;
   studio.setLight(state.light); studio.setBackground(state.bg); syncInputs(); rebuild(true);
 }
 function undo() { if (!history.past.length) return; history.future.push(current); current = history.past.pop(); restore(current); updUndo(); }
@@ -72,10 +91,20 @@ addEventListener('keydown', (e) => {
 let buildT, lastProduct;
 function refreshLogo() {
   const b = state.brand;
-  if (b.logoSource === 'ai') b.logo = makeLogo(b);
+  if (b.logoSource === 'ai') b.logoSource = 'spec';
+  if (b.logoSource === 'spec' && b.logoSpec) { b.logo = specLogo(b); b.logoHasName = true; }
+  else b.logoHasName = false;
   const pc = $('#logo-preview'), g = pc.getContext('2d');
   g.clearRect(0, 0, 120, 120); g.fillStyle = state.brand.style === 'minimal' ? mix(b.pack, '#fff', 0.9) : b.pack; g.fillRect(0, 0, 120, 120);
   if (b.logo) { const k = 100 / Math.max(b.logo.width, b.logo.height); g.drawImage(b.logo, 60 - (b.logo.width * k) / 2, 60 - (b.logo.height * k) / 2, b.logo.width * k, b.logo.height * k); }
+}
+// the designed logo, re-coloured so it always reads on this pack
+function specLogo(b) { const sp = { ...b.logoSpec, name: b.name || b.logoSpec.name }; return renderLogo(sp, packColors(sp, paper(b), b.accent, ink(b))).canvas; }
+// a clean name-only logo when nobody designed one yet (used for all 3 concepts, so the brand stays consistent)
+const STYLE_PREFS = { classic: { modern: -0.5, serious: 0.5, bold: 0 }, minimal: { modern: 0.6, serious: 0.4, bold: -0.3, precise: 0.6 }, bold: { modern: 0.4, serious: -0.5, bold: 0.8 }, heritage: { modern: -0.7, serious: 0, bold: 0.4, precise: -0.3 } };
+function autoSpec(p) {
+  const dark = luminance(p.palette.pack) < luminance(p.palette.accent) ? p.palette.pack : p.palette.accent;
+  return designLogos({ name: p.name, brief: $('#brief').value, type: 'wordmark', prefs: STYLE_PREFS[p.style] || {}, colors: [dark, p.palette.accent] })[0];
 }
 function rebuild(now = false, { commitIt = true } = {}) {
   clearTimeout(buildT);
@@ -115,11 +144,11 @@ function planFromState() {
     logo: b.logoSpec, finish: state.finish, light: state.light, reasoning: state.plan?.reasoning || {} });
 }
 function brandFromPlan(p, keepUploaded) {
-  const b = { ...state.brand, fonts: { ...p.fonts }, pattern: { ...p.pattern, image: null }, border: { ...state.brand.border, type: p.border.type },
+  const b = { ...state.brand, fonts: { ...p.fonts }, pattern: { ...p.pattern, image: null }, border: { ...state.brand.border, type: borderType(p.border.type), image: null },
     name: p.name, tagline: p.tagline, detail: p.detail, pack: p.palette.pack, accent: p.palette.accent, ink: null, style: p.style,
-    logoSpec: { ...p.logo }, logoScale: p.logoScale ?? 1, logoY: 0, logoPlate: false, artwork: null };
-  if (keepUploaded && state.brand.uploadedLogo) { b.logo = state.brand.uploadedLogo; b.logoSource = 'upload'; }
-  else { b.logoSource = 'ai'; b.logo = makeLogo(b); }
+    logoSpec: state.brand.logoSpec || autoSpec(p), logoScale: p.logoScale ?? 1, logoY: 0, logoPlate: false, artwork: null };
+  if (keepUploaded && state.brand.uploadedLogo) { b.logo = state.brand.uploadedLogo; b.logoSource = 'upload'; b.logoHasName = false; }
+  else { b.logoSource = 'spec'; b.logo = specLogo(b); b.logoHasName = true; }
   return b;
 }
 async function applyPlan(p, { keepUploaded = $('#use-logo').checked } = {}) {
@@ -183,9 +212,11 @@ async function generate(opts = {}) {
   const btn = $('#generate'); btn.disabled = true; btn.textContent = 'Designing…'; $('#busy').hidden = false;
   const hasLogo = !!state.brand.uploadedLogo && $('#use-logo').checked;
   const colors = opts.colors || [];
+  const locked = !hasLogo && state.logoLocked && state.brand.logoSpec;
+  if (locked) opts = { ...opts, name: opts.name || state.brand.logoSpec.name };
   let plans, note = '';
   if (aiMode !== 'local') {
-    const res = await askAI({ mode: 'concepts', brief, images: state.refs.map((r) => r.data), hasLogo });
+    const res = await askAI({ mode: 'concepts', brief: brief + (locked ? ` Their logo is already designed (colours ${state.brand.logoSpec.colors.primary} and ${state.brand.logoSpec.colors.secondary}) — build the packaging around it.` : ''), images: state.refs.map((r) => r.data), hasLogo: hasLogo || !!locked });
     if (res?.concepts?.length) { plans = res.concepts.slice(0, 3).map((p) => normalizePlan(p, { hasLogo })); aiMode = 'ai'; }
     else { if (res?.unavailable) aiMode = 'local'; else note = `AI had a problem (${res?.error || 'unknown'}) — used the built-in designer.`; }
     setAiStatus();
@@ -193,6 +224,8 @@ async function generate(opts = {}) {
   if (!plans) plans = designLocally(brief, { refColors: colors.length ? [colors[0], colors[1] || mix(colors[0], isDark(colors[0]) ? '#f3d9a4' : '#2a1d16', 0.6)] : state.refs[0]?.colors || [], hasLogo });
   // hard choices from the start screen always win
   plans = plans.map((p) => normalizePlan({ ...p, ...(opts.name ? { name: opts.name } : {}), ...(opts.product ? { product: opts.product } : {}) }, { hasLogo }));
+  // one logo for all three concepts: the locked one, or a clean wordmark
+  if (!locked && !hasLogo) state.brand.logoSpec = autoSpec(plans[0]);
   state.concepts = plans;
   await renderConcepts();
   await applyPlan(plans[0], { keepUploaded: hasLogo });
@@ -258,9 +291,12 @@ $('#chat-form').onsubmit = async (e) => {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 $('#font-display').innerHTML = $('#font-body').innerHTML = Object.entries(FONTS).map(([f, v]) => `<option value="${f}">${f} — ${v.label}</option>`).join('');
 $('#patterns').innerHTML = Object.entries(PATTERNS).map(([k, v]) => `<button data-pattern="${k}">${v}</button>`).join('');
-$('#borders').innerHTML = Object.entries(BORDERS).filter(([k]) => k !== 'image').map(([k, v]) => `<button data-border="${k}">${v}</button>`).join('');
-$('#logo-shapes').innerHTML = LOGO_SHAPES.map((s) => `<button data-lshape="${s}">${s}</button>`).join('');
-$('#logo-icons').innerHTML = Object.keys(ICONS).map((s) => `<button data-licon="${s}" title="${s}">${s}</button>`).join('');
+$('#borders').innerHTML = Object.entries(BORDERS).filter(([k]) => k !== 'image').map(([k, v]) => `<button data-border="${k}" title="${v}"><canvas width="128" height="168"></canvas><span>${v}</span></button>`).join('');
+let tileKey = '';
+function renderBorderTiles() {
+  const b = state.brand, key = [paper(b), b.accent, b.name, b.border.color, b.style, b.fonts.body].join('|'); if (key === tileKey) return; tileKey = key;
+  $$('#borders [data-border]').forEach((el) => { const c = el.querySelector('canvas'), t = borderTile(b, el.dataset.border, 64, 84); c.getContext('2d').drawImage(t, 0, 0, 128, 168); });
+}
 
 function syncInputs() {
   const b = state.brand;
@@ -272,9 +308,14 @@ function syncInputs() {
   $('#bg-swatches').innerHTML = bgs.map((c) => `<button class="sw" style="--c:${c}" data-bg="${c}"></button>`).join('');
   const on = (sel, key, val) => $$(sel).forEach((el) => el.classList.toggle('on', el.dataset[key] === val));
   on('[data-style]', 'style', b.style); on('[data-product]', 'product', state.product); on('[data-finish]', 'finish', state.finish); on('[data-light]', 'light', state.light);
-  on('[data-pattern]', 'pattern', b.pattern.image ? '' : b.pattern.type); on('[data-border]', 'border', b.border.type);
-  on('[data-lshape]', 'lshape', b.logoSpec.shape); on('[data-licon]', 'licon', b.logoSpec.icon);
-  $('#logo-gen').hidden = b.logoSource !== 'ai';
+  on('[data-pattern]', 'pattern', b.pattern.image ? '' : b.pattern.type); on('[data-border]', 'border', b.border.type === 'image' ? '' : borderType(b.border.type));
+  on('[data-bcol]', 'bcol', b.border.color || 'accent');
+  $('#border-ctl').hidden = b.border.type === 'none';
+  $('#corners-row').hidden = !CORNER_OK.includes(b.border.type); $('#border-corners').checked = !!b.border.corners;
+  $('#border-inset').value = b.border.inset ?? 0.045; $('#bi-v').textContent = `${Math.round((b.border.inset ?? 0.045) * 100)}`;
+  renderBorderTiles();
+  $('#logo-tip').textContent = b.logoSource === 'upload' ? 'Using your uploaded logo.' : state.logoLocked ? 'Your logo from Logo Studio — tap Logo Studio to edit it.' : 'A simple name logo for now. Open Logo Studio to design a real one.';
+  $('#dl-logo-svg').hidden = b.logoSource !== 'spec';
   $('#logo-scale').value = b.logoScale; $('#ls-v').textContent = `${Math.round(b.logoScale * 100)}%`;
   $('#logo-y').value = b.logoY; $('#ly-v').textContent = Math.abs(b.logoY) < 0.01 ? 'centre' : b.logoY < 0 ? 'higher' : 'lower';
   $('#logo-plate').checked = b.logoPlate;
@@ -307,8 +348,7 @@ document.addEventListener('click', async (e) => {
   if (d.bg) { state.bg = d.bg; studio.setBackground(d.bg); syncInputs(); commit(); }
   if (d.pattern) { b.pattern = { ...b.pattern, type: d.pattern, image: null, opacity: d.pattern !== 'none' && b.pattern.type === 'none' ? (b.style === 'heritage' ? 0.5 : 0.18) : b.pattern.opacity }; syncInputs(); rebuild(); }
   if (d.border) { b.border = { ...b.border, type: d.border }; syncInputs(); rebuild(); }
-  if (d.lshape) { b.logoSpec = { ...b.logoSpec, shape: d.lshape }; syncInputs(); rebuild(); }
-  if (d.licon) { b.logoSpec = { ...b.logoSpec, icon: d.licon }; syncInputs(); rebuild(); }
+  if (d.bcol) { b.border = { ...b.border, color: d.bcol }; syncInputs(); rebuild(); }
   if (d.tab) { $$('[data-tab]').forEach((x) => x.classList.toggle('on', x === t)); document.body.dataset.tab = d.tab; }
 });
 $('#c-pack').addEventListener('input', (e) => { state.brand.pack = e.target.value; rebuild(); });
@@ -322,6 +362,14 @@ $('#logo-y').oninput = (e) => { state.brand.logoY = +e.target.value; syncInputs(
 $('#logo-plate').onchange = (e) => { state.brand.logoPlate = e.target.checked; rebuild(); };
 $('#pattern-op').oninput = (e) => { state.brand.pattern.opacity = +e.target.value; $('#po-v').textContent = `${Math.round(e.target.value * 100)}%`; rebuild(); };
 $('#border-size').oninput = (e) => { state.brand.border.size = +e.target.value; $('#bs-v').textContent = `${Math.round(e.target.value * 100)}`; rebuild(); };
+$('#border-inset').oninput = (e) => { state.brand.border.inset = +e.target.value; $('#bi-v').textContent = `${Math.round(e.target.value * 100)}`; rebuild(); };
+$('#border-corners').onchange = (e) => { state.brand.border.corners = e.target.checked; rebuild(); };
+$('#use-logo').onchange = (e) => {
+  const b = state.brand;
+  if (e.target.checked && b.uploadedLogo) { b.logo = b.uploadedLogo; b.logoSource = 'upload'; }
+  else { b.logoSource = 'spec'; if (!b.logoSpec) b.logoSpec = autoSpec(planFromState()); }
+  syncInputs(); rebuild(true);
+};
 $('#dims').addEventListener('input', (e) => {
   const k = e.target.dataset.dim, mm = e.target.dataset.mm;
   if (k) { state.dims[state.product][k] = +e.target.value; e.target.closest('label').querySelector('.mm').value = Math.round(e.target.value * 100); rebuild(); }
@@ -352,7 +400,12 @@ $('#logo-file').addEventListener('change', async (e) => {
   await useUploadedLogo(await fileToImage(f), state.brand.name || f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '));
   e.target.value = '';
 });
-$('#ai-logo').onclick = () => { const b = state.brand; b.logoSource = 'ai'; b.logoPlate = false; if (!b.logoSpec.monogram) b.logoSpec.monogram = ''; syncInputs(); rebuild(true); };
+// Logo Studio from the sidebar: edit the current logo (or start one)
+function lockLogo(spec) {
+  const b = state.brand; state.logoLocked = true; b.logoSpec = spec; b.logoSource = 'spec'; b.logoPlate = false; b.name = spec.name || b.name;
+  $('#use-logo').checked = false; syncInputs(); rebuild(true);
+}
+$('#ai-logo').onclick = () => openLogoStudio({ name: state.brand.name, brief: $('#brief').value, colors: [state.brand.accent], spec: state.logoLocked ? { ...state.brand.logoSpec, name: state.brand.name } : null, onUse: lockLogo, ai: () => aiMode !== 'local' });
 $('#load-dsert').onclick = () => loadDsert();
 $('#pattern-file').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; state.brand.pattern = { type: 'image', opacity: 0.35, image: await fileToImage(f) }; e.target.value = ''; syncInputs(); rebuild(true); });
 $('#border-file').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; state.brand.border = { ...state.brand.border, type: 'image', image: await fileToImage(f) }; e.target.value = ''; syncInputs(); rebuild(true); });
@@ -380,7 +433,11 @@ $$('dialog .close').forEach((b) => b.addEventListener('click', () => b.closest('
 const size = () => SIZES[$('input[name=size]:checked').value];
 $('#dl-png').addEventListener('click', async () => { const [w, h] = size(); download(await studio.snapshot(w, h), `${slug()}-${state.product}.png`); });
 $('#dl-alpha').addEventListener('click', async () => { const [w, h] = size(); download(await studio.snapshot(w, h, { transparent: true }), `${slug()}-${state.product}-transparent.png`); });
-$('#dl-logo').addEventListener('click', () => { const l = state.brand.logo; if (!l) return; const c = document.createElement('canvas'); c.width = l.width; c.height = l.height; c.getContext('2d').drawImage(l, 0, 0); c.toBlob((b) => download(b, `${slug()}-logo.png`)); });
+$('#dl-logo').addEventListener('click', () => {
+  const b = state.brand, l = b.logoSource === 'spec' && b.logoSpec ? renderLogo({ ...b.logoSpec, name: b.name }, b.logoSpec.colors).canvas : b.logo; if (!l) return;
+  const k = Math.max(1, 1024 / Math.max(l.width, l.height)), c = document.createElement('canvas'); c.width = l.width * k; c.height = l.height * k; c.getContext('2d').drawImage(l, 0, 0, c.width, c.height); c.toBlob((bl) => download(bl, `${slug()}-logo.png`));
+});
+$('#dl-logo-svg').addEventListener('click', async () => { const b = state.brand; if (!b.logoSpec) return; const sp = { ...b.logoSpec, name: b.name }; download(new Blob([await logoSVG(sp, sp.colors)], { type: 'image/svg+xml' }), `${slug()}-logo.svg`); });
 $('#dl-video').addEventListener('click', async (e) => {
   const btn = e.currentTarget, bar = $('#rec-bar'); const [w, h] = size();
   btn.disabled = true; bar.hidden = false;
@@ -402,7 +459,7 @@ const IDEAS = [
   ['Kids mango ice cream', 'Scoopy'],
   ['Diwali mithai gift box', 'Shubh Mithai'],
 ];
-const wz = { product: '', vibes: [], colors: [], logo: null };
+const wz = { product: '', vibes: [], colors: [], logo: null, choice: 'make' };
 function renderWizard() {
   $('#wz-vibe').innerHTML = VIBES.map((v) => `<button type="button" data-wv="${v}" class="${wz.vibes.includes(v) ? 'on' : ''}">${v}</button>`).join('');
   $('#wz-colors').innerHTML = `<button type="button" class="wz-auto ${wz.colors.length ? '' : 'on'}" data-wc="">✦ Let AI pick</button>`
@@ -411,12 +468,16 @@ function renderWizard() {
     + (wz.colors.length ? `<small class="wz-picked">Picked: ${wz.colors.map((c) => `<i style="background:${c}"></i>`).join('')}</small>` : '');
   $$('#wz-product [data-wp]').forEach((b) => b.classList.toggle('on', b.dataset.wp === wz.product));
   $('#wz-ref-list').innerHTML = state.refs.map((r, i) => `<span class="ref"><img src="${r.data}" alt="" /><button type="button" data-rmref="${i}" aria-label="Remove">✕</button></span>`).join('');
+  $$('#wz-lchoice [data-wl]').forEach((b) => b.classList.toggle('on', b.dataset.wl === wz.choice));
+  $('#wz-logo-drop').hidden = wz.choice !== 'upload';
+  $('#wz-go').textContent = wz.choice === 'make' ? '✦ Next: design my logo' : '✦ Design my packaging';
   $('#wz-ideas').innerHTML = '<small>Need an idea?</small>' + IDEAS.map(([w, n], i) => `<button type="button" class="ex" data-idea="${i}">${w}</button>`).join('');
 }
 function openWizard() { renderWizard(); $('#start').showModal(); setTimeout(() => $('#wz-what').focus(), 50); }
 $('#wizard').addEventListener('click', (e) => {
   const t = e.target.closest('button'); if (!t) return;
   const d = t.dataset;
+  if (d.wl) { wz.choice = d.wl; renderWizard(); }
   if (d.wp !== undefined) { wz.product = d.wp; renderWizard(); }
   if (d.wv) { wz.vibes = wz.vibes.includes(d.wv) ? wz.vibes.filter((v) => v !== d.wv) : [...wz.vibes, d.wv].slice(-3); renderWizard(); }
   if (d.wc !== undefined) { if (!d.wc) wz.colors = []; else wz.colors = wz.colors.includes(d.wc) ? wz.colors.filter((c) => c !== d.wc) : [...wz.colors, d.wc].slice(-2); renderWizard(); }
@@ -448,25 +509,33 @@ $('#wizard').addEventListener('submit', async (e) => {
     wz.product ? `Packaging: ${wz.product}.` : '',
     wz.vibes.length ? `Feel: ${wz.vibes.join(', ').toLowerCase()}.` : '',
     wz.colors.length ? `Preferred colours: ${wz.colors.join(', ')}.` : '',
-    wz.logo ? 'They already have a logo.' : 'They have no logo — design one.',
   ].filter(Boolean).join(' ');
+  if (wz.choice === 'upload' && !wz.logo) { $('#wz-logo-drop').classList.add('shake'); setTimeout(() => $('#wz-logo-drop').classList.remove('shake'), 500); return; }
   $('#start').close();
-  if (wz.logo) { await useUploadedLogo(wz.logo, name || undefined); } else { $('#use-logo').checked = false; }
   $('#brief').value = brief;
-  if (matchMedia('(max-width: 899px)').matches) { $$('[data-tab]').forEach((x) => x.classList.toggle('on', x.dataset.tab === 'create')); document.body.dataset.tab = 'create'; }
-  await generate({ brief, name, product: wz.product, colors: wz.colors });
+  const toCreate = () => { if (matchMedia('(max-width: 899px)').matches) { $$('[data-tab]').forEach((x) => x.classList.toggle('on', x.dataset.tab === 'create')); document.body.dataset.tab = 'create'; } };
+  if (wz.choice === 'upload') { state.logoLocked = false; await useUploadedLogo(wz.logo, name || undefined); toCreate(); return generate({ brief, name, product: wz.product, colors: wz.colors }); }
+  $('#use-logo').checked = false; state.brand.logoSource = 'spec';
+  if (wz.choice === 'name') { state.logoLocked = false; state.brand.logoSpec = null; toCreate(); return generate({ brief, name, product: wz.product, colors: wz.colors }); }
+  // no logo yet: design it first, then the packaging is built around it
+  openLogoStudio({
+    name, brief: what, colors: wz.colors, vibes: wz.vibes, ai: () => aiMode !== 'local',
+    onUse: (spec) => { state.logoLocked = true; state.brand.logoSpec = spec; toCreate(); generate({ brief: brief.replace(/No brand name yet — suggest one\./, `Brand name: "${spec.name}".`), name: spec.name, product: wz.product, colors: wz.colors.length ? wz.colors : [spec.colors.primary, spec.colors.secondary] }); },
+    onSkip: (nm) => { state.logoLocked = false; state.brand.logoSpec = null; toCreate(); generate({ brief, name: nm || name, product: wz.product, colors: wz.colors }); },
+  });
 });
 
 // ---------- start ----------
 async function loadDsert() {
   const img = await loadImage(BASE + 'samples/dsert.png');
-  Object.assign(state.brand, { name: 'D-SERT', tagline: 'Handcrafted desserts', detail: 'Belgian chocolate · 250 g', style: 'classic', fonts: { display: 'DM Serif Display', body: 'Inter' }, pattern: { type: 'none', opacity: 0.18, image: null }, border: { type: 'double', size: 0.06, image: null }, logoScale: 1, logoY: 0 });
+  Object.assign(state.brand, { name: 'D-SERT', tagline: 'Handcrafted desserts', detail: 'Belgian chocolate · 250 g', style: 'classic', fonts: { display: 'DM Serif Display', body: 'Inter' }, pattern: { type: 'none', opacity: 0.18, image: null }, border: { type: 'double', size: 0.06, inset: 0.045, color: 'accent', corners: false, image: null }, logoScale: 1, logoY: 0 });
   state.plan = null;
   await useUploadedLogo(img);
   $('#use-logo').checked = false; // a sample, not the user's own logo
   state.bg = '#efe3d2'; studio.setBackground(state.bg); syncInputs();
 }
 renderRefs();
+initLogoStudio();
 document.fonts.ready.then(async () => {
   // a neutral demo brand sits behind the start screen (made by the built-in designer)
   const demo = designLocally("Premium masala chai called 'Kesar Chai' — warm, traditional")[0];

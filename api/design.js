@@ -1,17 +1,18 @@
 // Vercel serverless function: the AI Design Director.
 // Modes: "concepts" (brief + reference images → 3 design plans), "refine" (plan + instruction → plan),
-//        "explain" (plan + question → answer).
+//        "explain" (plan + question → answer), "logos" (brief + preferences → 6 logo recipes).
 // Set GEMINI_API_KEY in Vercel → Settings → Environment Variables. Optional: GEMINI_MODEL.
 export const config = { maxDuration: 60 };
 
 const API = 'https://generativelanguage.googleapis.com/v1beta';
 const PRODUCTS = ['can', 'box', 'tub', 'jar', 'pouch'];
 const STYLES = ['classic', 'bold', 'minimal', 'heritage'];
-const FONTS = ['Instrument Serif', 'DM Serif Display', 'Bebas Neue', 'Space Grotesk', 'Inter', 'Caveat', 'Tiro Devanagari Hindi', 'Mukta'];
+const FONTS = ['Instrument Serif', 'DM Serif Display', 'Bebas Neue', 'Space Grotesk', 'Inter', 'Caveat', 'Tiro Devanagari Hindi', 'Mukta', 'Fraunces', 'Cormorant Garamond', 'Marcellus', 'Abril Fatface', 'Rozha One', 'Young Serif', 'Shrikhand', 'Baloo 2', 'Unbounded', 'Bricolage Grotesque', 'Syne'];
 const PATTERNS = ['none', 'rangoli', 'warli', 'madhubani', 'kalamkari', 'blockprint', 'botanical', 'dots', 'stripes', 'chevron'];
-const BORDERS = ['none', 'double', 'scallop', 'temple', 'dots'];
-const SHAPES = ['badge', 'stamp', 'arch', 'monogram', 'wordmark', 'hexagon'];
-const ICONS = ['none', 'leaf', 'cup', 'chili', 'drop', 'star', 'sun', 'flower', 'wheat', 'cake', 'bean', 'fruit', 'heart'];
+const BORDERS = ['none', 'double', 'arch', 'ticket', 'stamp', 'crop', 'nameband', 'checker', 'wavy', 'stitched', 'torn', 'jali', 'deco', 'botanical', 'bauhaus', 'cutcorner', 'sticker'];
+const LAYOUTS = ['wordmark', 'stacked', 'mark-left', 'mark-top', 'lettermark', 'emblem'];
+const TREATMENTS = ['none', 'swash', 'dot', 'split', 'shadow', 'cut', 'outline', 'swap'];
+const CONTAINERS = ['none', 'circle', 'square', 'arch', 'shield', 'blob', 'pill'];
 
 const S = (extra = {}) => ({ type: 'STRING', ...extra });
 const PLAN = {
@@ -23,11 +24,10 @@ const PLAN = {
     fonts: { type: 'OBJECT', properties: { display: S({ enum: FONTS }), body: S({ enum: FONTS }) }, required: ['display', 'body'] },
     pattern: { type: 'OBJECT', properties: { type: S({ enum: PATTERNS }), opacity: { type: 'NUMBER' } }, required: ['type', 'opacity'] },
     border: { type: 'OBJECT', properties: { type: S({ enum: BORDERS }) }, required: ['type'] },
-    logo: { type: 'OBJECT', properties: { shape: S({ enum: SHAPES }), icon: S({ enum: ICONS }), monogram: S() }, required: ['shape', 'icon', 'monogram'] },
     finish: S({ enum: ['gloss', 'matte', 'metallic'] }), light: S({ enum: ['studio', 'sunlit', 'dramatic'] }),
     reasoning: { type: 'OBJECT', properties: { colour: S(), type: S(), layout: S() }, required: ['colour', 'type', 'layout'] },
   },
-  required: ['concept', 'name', 'tagline', 'detail', 'product', 'style', 'palette', 'fonts', 'pattern', 'border', 'logo', 'finish', 'light', 'reasoning'],
+  required: ['concept', 'name', 'tagline', 'detail', 'product', 'style', 'palette', 'fonts', 'pattern', 'border', 'finish', 'light', 'reasoning'],
 };
 
 const GUIDE = `You are the senior packaging & brand designer inside Wrapt, a 3D packaging studio for small brands, mostly in India.
@@ -37,8 +37,9 @@ Rules:
 - Make text readable: accent and pack need strong contrast; avoid putting a mid-tone accent on a mid-tone pack.
 - Styles: classic = centred logo + small caps, calm; bold = big logo + diagonal colour band, energetic; minimal = near-white pack + one colour band, lots of space; heritage = Indian pattern bands at top & bottom + big display name, traditional.
 - Patterns: rangoli/kolam (festive, South Indian), warli (tribal, earthy, Maharashtra), madhubani (Bihar folk art, fish motifs), kalamkari (paisley, premium ethnic), blockprint (Rajasthani booti, homely), botanical (natural/herbal), dots/stripes/chevron (modern/playful). opacity 0–0.6; heritage looks best 0.4–0.6, other styles 0.08–0.25.
-- Fonts: use 'Tiro Devanagari Hindi' or 'Mukta' whenever name or tagline contains Hindi/Devanagari. Bebas Neue = loud/young, DM Serif Display = premium, Instrument Serif = elegant/minimal, Caveat = handmade, Space Grotesk/Inter = modern.
-- Logo: shape + one icon that fits the product + a 1–2 letter monogram. If the user already has a logo, still fill this in (it is ignored).
+- Fonts: use 'Tiro Devanagari Hindi' or 'Mukta' whenever name or tagline contains Hindi/Devanagari. Bebas Neue = loud/young, DM Serif Display/Abril Fatface/Rozha One = premium & bold, Cormorant Garamond/Marcellus/Instrument Serif = elegant luxury, Fraunces/Young Serif = warm & friendly, Caveat = handmade, Shrikhand/Baloo 2 = playful, Space Grotesk/Inter/Unbounded/Syne/Bricolage Grotesque = modern.
+- Borders: double (classic), arch (Mughal arch window — candles, skincare, D2C), ticket (snacks, coffee), stamp (gifting, heritage), crop (printer's crop marks — minimal, editorial), nameband (brand name ribbon — bold, streetwear), checker (retro cafe, fun), wavy (kids, drinks), stitched (handmade, crafts), torn (rustic, artisanal), jali (Indian lattice — traditional), deco (art deco corners — luxury, gold), botanical (leaf corners — tea, natural, skincare), bauhaus (geometric blocks — bold, colourful), cutcorner (apothecary — spices, wellness), sticker (friendly label), none.
+- The logo is designed separately — don't describe one.
 - Product: choose the packaging type that suits what they sell (jar for pickles/jams/ghee/creams, can for drinks, tub for desserts/ice cream/curd, pouch for tea/coffee/spices/snacks, box for sweets/cookies/soap/cosmetics/gifts) unless the user asks for one.
 - Name: use the user's brand name exactly if given (keep Hindi as Hindi). Otherwise invent a short, memorable, culturally fitting name. Tagline under 6 words. detail = variant + quantity, e.g. "Raw mango · 250 g".
 - Reference images are for MOOD only (colour, era, feeling). Never copy another brand's name, logo or exact layout.
@@ -84,6 +85,35 @@ export default async function handler(req, res) {
       { text: `${GUIDE}\n\n${images.length ? `The user attached ${images.length} reference image(s) — take only their mood.\n` : ''}${hasLogo ? 'The user already has their own logo.\n' : 'The user has no logo; design one with the logo fields.\n'}User brief: """${String(brief).slice(0, 1500)}"""\n\nReturn exactly 3 clearly different concepts (for example Premium, Minimal, and Traditional or Playful — pick what fits the brief), each a complete plan.` },
     ];
     schema = { type: 'OBJECT', properties: { concepts: { type: 'ARRAY', items: PLAN } }, required: ['concepts'] };
+  } else if (mode === 'logos') {
+    const b = req.body || {}, p = b.prefs || {};
+    const fonts = (Array.isArray(b.fonts) ? b.fonts : FONTS).map(String).slice(0, 40), glyphs = (Array.isArray(b.glyphs) && b.glyphs.length ? b.glyphs : ['sun']).map(String).slice(0, 12);
+    const sl = p.sliders || {}, word = (v, a, z) => (v < -0.25 ? a : v > 0.25 ? z : `between ${a} and ${z}`);
+    parts = [
+      ...(b.images || []).slice(0, 1).map((d) => ({ inline_data: { mime_type: 'image/jpeg', data: String(d).split(',').pop() } })),
+      { text: `You are a senior brand identity designer. Design 6 LOGO RECIPES for a small brand. You never draw: Wrapt's engine renders each recipe as a vector logo.
+Brand name: ${b.name ? `"${String(b.name).slice(0, 40)}"` : '(none — invent a short, memorable, culturally fitting name and return it in "name")'}
+What they sell: """${String(b.brief).slice(0, 600)}"""
+Logo type wanted: ${p.type || 'surprise me'}. Shape feel: ${p.shape || 'no preference'}. Personality: ${word(sl.modern || 0, 'classic', 'modern')}, ${word(sl.serious || 0, 'playful', 'serious')}, ${word(sl.bold || 0, 'delicate', 'bold')}, ${word(sl.precise || 0, 'handmade', 'precise')}.
+${p.colors?.length ? `Colours they chose: ${p.colors.join(', ')} — use them.` : 'Pick a confident 1–2 colour palette that suits the product.'}
+${p.idea ? `Their idea: """${String(p.idea).slice(0, 200)}"""` : ''}
+${b.hasSketch ? 'The attached image is THE USER\'S OWN DRAWING of their symbol. It is the heart of the logo: use mark.source="sketch" in at least 4 of the 6 recipes, and pick fonts that match its character (mention it in rationale).' : ''}
+Rules for great, non-generic logos:
+- Typography first: at least 3 recipes are type-led (layout wordmark, stacked or lettermark, or a treatment). Great small-brand logos are mostly great type with one clever detail.
+- Treatments: swash = curved underline; dot = coloured full stop after the name; split = second word (or first letter) in the second colour; shadow = retro offset shadow; cut = a thin horizontal slice through the letters; outline = only for heavy fonts; swap = the symbol replaces an "o" in the name (only if the name has an o).
+- Symbols: use ONLY these glyphs, they fit the product: ${glyphs.join(', ')}. Use source "none" for pure type. Never add hearts or stars unless the user asked.
+- Max 2 elements (symbol + name). Must read at 32px and in one colour. tracking: -4..30 (positive for UPPERCASE, about 0 for title/lower case).
+- emblem = round seal with the name on the arc; "sub" is a short word for the bottom arc or under a stacked logo (e.g. the product category), max 14 characters.
+- All 6 must clearly differ in layout and font. colors.primary must be dark or strong enough to read on cream.
+- rationale: one friendly sentence for a non-designer about why this works.` },
+    ];
+    const LOGO = { type: 'OBJECT', properties: {
+      layout: S({ enum: LAYOUTS }), font: S({ enum: fonts }), weight: S({ enum: ['regular', 'bold'] }), case: S({ enum: ['title', 'upper', 'lower'] }), tracking: { type: 'NUMBER' },
+      treatment: S({ enum: TREATMENTS }), sub: S(),
+      mark: { type: 'OBJECT', properties: { source: S({ enum: b.hasSketch ? ['none', 'glyph', 'sketch'] : ['none', 'glyph'] }), glyph: S({ enum: glyphs }), container: S({ enum: CONTAINERS }), style: S({ enum: ['fill', 'line'] }) }, required: ['source', 'glyph', 'container', 'style'] },
+      colors: { type: 'OBJECT', properties: { primary: S(), secondary: S() }, required: ['primary', 'secondary'] }, rationale: S() },
+      required: ['layout', 'font', 'weight', 'case', 'tracking', 'treatment', 'mark', 'colors', 'rationale'] };
+    schema = { type: 'OBJECT', properties: { name: S(), logos: { type: 'ARRAY', items: LOGO } }, required: ['name', 'logos'] };
   } else if (mode === 'refine') {
     parts = [{ text: `${GUIDE}\n\nCurrent plan:\n${JSON.stringify(plan).slice(0, 4000)}\n\nUser request: """${String(instruction).slice(0, 500)}"""\nReturn the updated full plan (change only what the request implies) and a short friendly note saying what you changed.` }];
     schema = { type: 'OBJECT', properties: { plan: PLAN, note: S() }, required: ['plan', 'note'] };

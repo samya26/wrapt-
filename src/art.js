@@ -69,6 +69,17 @@ export const FONTS = {
   Caveat: { w: 600, label: 'Handwritten' },
   'Tiro Devanagari Hindi': { w: 400, label: 'Hindi serif' },
   Mukta: { w: null, label: 'Hindi sans' },
+  Fraunces: { w: null, label: 'Soft serif' },
+  'Cormorant Garamond': { w: null, label: 'Luxury serif' },
+  Marcellus: { w: 400, label: 'Classic caps' },
+  'Abril Fatface': { w: 400, label: 'Fat serif' },
+  'Rozha One': { w: 400, label: 'Indian display' },
+  'Young Serif': { w: 400, label: 'Warm serif' },
+  Shrikhand: { w: 400, label: 'Retro bold' },
+  'Baloo 2': { w: null, label: 'Rounded' },
+  Unbounded: { w: null, label: 'Wide modern' },
+  'Bricolage Grotesque': { w: null, label: 'Quirky sans' },
+  Syne: { w: null, label: 'Art-school' },
 };
 export const fontWeight = (f, w) => FONTS[f]?.w ?? (w >= 700 ? 700 : w >= 600 ? 600 : w >= 500 ? 500 : 400);
 export const fontCss = (f, w, size, italic = false) => `${italic && f === 'Instrument Serif' ? 'italic ' : ''}${fontWeight(f, w)} ${size}px "${f}", "Mukta", "Tiro Devanagari Hindi", sans-serif`;
@@ -79,29 +90,6 @@ export async function loadFonts(...families) {
 // ---------- images ----------
 export function loadImage(src) {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
-}
-
-// ---------- icons (24×24 line drawings) for generated logos ----------
-export const ICONS = {
-  none: '',
-  leaf: 'M5 19C5 10 11 5 19 5c0 9-6 14-14 14zM5 19l9-9',
-  cup: 'M5 10h11v4a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 11h1.5a2 2 0 0 1 0 4H16M8.5 3.5c-1 1 1 2 0 3.5M12 3.5c-1 1 1 2 0 3.5',
-  chili: 'M18 6c-1 7-6 12-13 13 3-3 6-6 8-11M18 6l2-2M17 5c-1-1-3-1-4 1',
-  drop: 'M12 3c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11z',
-  star: 'M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z',
-  sun: 'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2',
-  flower: 'M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM12 9c-2-4 2-6 2-6s3 3-2 6M15 12c4-2 6 2 6 2s-3 3-6-2M12 15c2 4-2 6-2 6s-3-3 2-6M9 12c-4 2-6-2-6-2s3-3 6 2',
-  wheat: 'M12 21V5M12 8c-3 0-4-3-4-3s3 0 4 3c1-3 4-3 4-3s-1 3-4 3M12 12c-3 0-4-3-4-3s3 0 4 3c1-3 4-3 4-3s-1 3-4 3M12 16c-3 0-4-3-4-3s3 0 4 3c1-3 4-3 4-3s-1 3-4 3',
-  cake: 'M4 20h16v-7H4zM4 15c2 1 3 1 4 0s3-1 4 0 3 1 4 0 3-1 4 0M12 13V9M12 6.5c-.8-.8 0-2 0-2s.8 1.2 0 2',
-  bean: 'M8 4c5-2 11 3 11 9s-6 9-11 7S3 13 4 9s2-4 4-5zM9 5c3 4 3 10 1 14',
-  fruit: 'M12 7c-4 0-7 3-7 7s3 7 7 7 7-3 7-7-3-7-7-7zM12 7c0-2 1-4 3-4M12 7c-2-2-4-2-5-1',
-  heart: 'M12 20s-8-5-8-11a4.5 4.5 0 0 1 8-2.6A4.5 4.5 0 0 1 20 9c0 6-8 11-8 11z',
-};
-function drawIcon(g, name, cx, cy, size, color, lw = 1.6) {
-  const p = ICONS[name]; if (!p) return;
-  g.save(); g.translate(cx - size / 2, cy - size / 2); g.scale(size / 24, size / 24);
-  g.strokeStyle = color; g.lineWidth = lw; g.lineCap = g.lineJoin = 'round';
-  g.stroke(new Path2D(p)); g.restore();
 }
 
 // ---------- text helpers ----------
@@ -116,76 +104,6 @@ function text(g, str, x, y, size, color, { font = 'Inter', weight = 600, align =
   g.fillText(str, x, y);
   g.restore();
 }
-function arcText(g, str, cx, cy, r, color, font, size, { bottom = false, spacing = 1.08 } = {}) {
-  g.save(); g.fillStyle = color; g.font = fontCss(font, 700, size); g.textAlign = 'center'; g.textBaseline = 'middle';
-  const chars = [...str]; const widths = chars.map((ch) => g.measureText(ch).width * spacing);
-  const total = widths.reduce((a, b) => a + b, 0); let a = (bottom ? Math.PI / 2 : -Math.PI / 2) + (bottom ? 1 : -1) * (-total / r / 2);
-  chars.forEach((ch, i) => {
-    const step = widths[i] / r; const mid = a + (bottom ? -1 : 1) * step / 2;
-    g.save(); g.translate(cx + Math.cos(mid) * r, cy + Math.sin(mid) * r); g.rotate(mid + (bottom ? -Math.PI / 2 : Math.PI / 2));
-    g.fillText(ch, 0, 0); g.restore();
-    a += (bottom ? -1 : 1) * step;
-  });
-  g.restore();
-}
-
-// ---------- generated vector logo ----------
-// spec = { shape, icon, monogram }, colours from the plan. Returns a transparent 800×800 canvas.
-export const LOGO_SHAPES = ['badge', 'stamp', 'arch', 'monogram', 'wordmark', 'hexagon'];
-export function makeLogo(b) {
-  const S = 800, c = document.createElement('canvas'); c.width = c.height = S;
-  const g = c.getContext('2d');
-  const spec = b.logoSpec || {}; const shape = spec.shape || 'badge';
-  const paperCol = paper(b);
-  const bg = contrast(b.accent, paperCol) >= 1.8 ? b.accent : autoInk(paperCol);
-  const fg = autoInk(bg) === '#1c1a17' ? mix(bg, '#000000', 0.82) : mix(bg, '#ffffff', 0.9);
-  const disp = b.fonts?.display || 'DM Serif Display';
-  const name = (b.name || 'Brand').trim();
-  const mono = (spec.monogram || name.split(/\s+/).map((w) => [...w][0]).join('').slice(0, 2)).toUpperCase();
-  const cx = S / 2, cy = S / 2;
-  g.lineJoin = 'round';
-  const nameFit = (maxW, size, y, col = fg, f = disp) => text(g, name, cx, y, size, col, { font: f, weight: 700, maxW });
-
-  if (shape === 'badge' || shape === 'stamp') {
-    g.fillStyle = bg; g.beginPath();
-    if (shape === 'stamp') { const n = 48; for (let i = 0; i <= n * 2; i++) { const a = (i / (n * 2)) * Math.PI * 2, r = i % 2 ? 372 : 392; g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); } }
-    else g.arc(cx, cy, 390, 0, Math.PI * 2);
-    g.fill();
-    g.strokeStyle = fg; g.lineWidth = 6; g.beginPath(); g.arc(cx, cy, 340, 0, Math.PI * 2); g.stroke();
-    g.lineWidth = 2.5; g.beginPath(); g.arc(cx, cy, 200, 0, Math.PI * 2); g.stroke();
-    arcText(g, name.toUpperCase(), cx, cy, 270, fg, disp === 'Caveat' ? 'Inter' : disp, name.length > 16 ? 50 : 62);
-    if (b.tagline) arcText(g, b.tagline.toUpperCase().slice(0, 28), cx, cy, 274, fg, 'Inter', 32, { bottom: true, spacing: 1.25 });
-    if (spec.icon && spec.icon !== 'none') { drawIcon(g, spec.icon, cx, cy - 40, 170, fg, 1.5); text(g, mono, cx, cy + 100, 64, fg, { font: disp, weight: 700 }); }
-    else text(g, mono, cx, cy + 8, 170, fg, { font: disp, weight: 700 });
-    for (const sx of [-1, 1]) drawIcon(g, 'star', cx + sx * 300, cy, 28, fg, 2);
-  } else if (shape === 'arch') {
-    g.fillStyle = bg; g.beginPath(); g.moveTo(130, 760); g.lineTo(130, 330); g.arc(cx, 330, 270, Math.PI, 0); g.lineTo(670, 760); g.closePath(); g.fill();
-    g.strokeStyle = fg; g.lineWidth = 5; g.beginPath(); g.moveTo(165, 725); g.lineTo(165, 335); g.arc(cx, 335, 235, Math.PI, 0); g.lineTo(635, 725); g.closePath(); g.stroke();
-    drawIcon(g, spec.icon && spec.icon !== 'none' ? spec.icon : 'star', cx, 330, 180, fg, 1.4);
-    nameFit(420, 96, 560);
-    if (b.tagline) text(g, b.tagline.toUpperCase(), cx, 650, 30, fg, { font: 'Inter', weight: 600, spacing: 4, maxW: 400 });
-  } else if (shape === 'monogram') {
-    g.fillStyle = bg; g.beginPath(); g.roundRect(120, 120, 560, 560, 90); g.fill();
-    g.strokeStyle = fg; g.lineWidth = 4; g.beginPath(); g.roundRect(150, 150, 500, 500, 70); g.stroke();
-    text(g, mono, cx, 360, 260, fg, { font: disp, weight: 700 });
-    nameFit(420, 52, 560, fg, 'Inter');
-  } else if (shape === 'hexagon') {
-    g.fillStyle = bg; g.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + (i * Math.PI) / 3; g.lineTo(cx + Math.cos(a) * 380, cy + Math.sin(a) * 380); } g.closePath(); g.fill();
-    g.strokeStyle = fg; g.lineWidth = 5; g.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + (i * Math.PI) / 3; g.lineTo(cx + Math.cos(a) * 335, cy + Math.sin(a) * 335); } g.closePath(); g.stroke();
-    if (spec.icon && spec.icon !== 'none') drawIcon(g, spec.icon, cx, cy - 80, 150, fg, 1.5);
-    nameFit(440, 84, cy + 70);
-    if (b.tagline) text(g, b.tagline.toUpperCase(), cx, cy + 160, 28, fg, { font: 'Inter', weight: 600, spacing: 4, maxW: 380 });
-  } else {
-    // wordmark: no container; ink colour chosen against the pack so it always reads
-    const col = readable(b.accent, paperCol, 3);
-    if (spec.icon && spec.icon !== 'none') drawIcon(g, spec.icon, cx, 230, 150, col, 1.5);
-    nameFit(720, 170, 430, col);
-    g.strokeStyle = col; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(260, 540); g.quadraticCurveTo(cx, 575, 540, 540); g.stroke();
-    if (b.tagline) text(g, b.tagline.toUpperCase(), cx, 620, 34, col, { font: 'Inter', weight: 600, spacing: 5, maxW: 640 });
-  }
-  return c;
-}
-
 // ---------- patterns (procedural tiles) ----------
 export const PATTERNS = {
   none: 'None', rangoli: 'Rangoli / kolam', warli: 'Warli', madhubani: 'Madhubani', kalamkari: 'Kalamkari paisley',
@@ -271,7 +189,10 @@ function paintPattern(g, x, y, w, h, b, s) {
 }
 
 // ---------- borders ----------
-export const BORDERS = { none: 'None', double: 'Double rule', scallop: 'Scallop', temple: 'Temple', dots: 'Dotted', image: 'Your border' };
+export const BORDERS = { none: 'None', double: 'Double rule', arch: 'Arch window', ticket: 'Ticket', stamp: 'Postage stamp', crop: 'Crop marks', nameband: 'Name band', checker: 'Checker', wavy: 'Wavy line', stitched: 'Hand-stitched', torn: 'Torn paper', jali: 'Jali lattice', deco: 'Art deco', botanical: 'Botanical', bauhaus: 'Bauhaus', cutcorner: 'Cut corner', sticker: 'Sticker', image: 'Your border' };
+export const BORDER_ALIAS = { scallop: 'wavy', temple: 'jali', dots: 'stitched' }; // old saves still load
+export const CORNER_OK = ['double', 'stitched', 'cutcorner'];
+export const borderType = (t) => BORDER_ALIAS[t] || (BORDERS[t] ? t : 'none');
 // 9-slice: corners keep their shape, edges stretch — so one border image fits any panel.
 function nineSlice(g, img, x, y, w, h, t) {
   const sw = img.width / 3, sh = img.height / 3;
@@ -282,31 +203,150 @@ function nineSlice(g, img, x, y, w, h, t) {
     g.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
   }
 }
+function rng(seed) { let v = seed >>> 0 || 7; return () => ((v = (v * 1664525 + 1013904223) >>> 0) / 4294967296); }
+function borderColor(b) {
+  const br = b.border || {}, pap = paper(b);
+  if (br.color === 'ink') return ink(b);
+  if (br.color === 'gold') return isDark(pap) ? '#dcb872' : '#a9843c';
+  return readable(b.accent, pap, 2.2);
+}
+// every corner in its own local frame: +x and +y point into the panel
+function eachCorner(g, X, Y, W, H, draw) {
+  for (const [cx, cy, sx, sy] of [[X, Y, 1, 1], [X + W, Y, -1, 1], [X, Y + H, 1, -1], [X + W, Y + H, -1, -1]]) {
+    g.save(); g.translate(cx, cy); g.scale(sx, sy); draw(); g.restore();
+  }
+}
 function paintBorder(g, x, y, w, h, b, s) {
-  const br = b.border || {}; const type = br.type || 'none'; if (type === 'none') return;
-  const col = br.color || b.accent;
-  const pad = s * 0.045, t = s * (br.size || 0.06);
-  g.save(); g.strokeStyle = g.fillStyle = col; g.lineCap = 'round';
-  const X = x + pad, Y = y + pad, W = w - pad * 2, H = h - pad * 2;
+  const br = b.border || {}; const type = br.type === 'image' ? 'image' : borderType(br.type); if (type === 'none') return;
+  const col = borderColor(b), pap = paper(b);
+  const k = (br.size ?? 0.06) / 0.06; // thickness multiplier
+  const ins = s * (br.inset ?? 0.045);
+  const X = x + ins, Y = y + ins, W = w - ins * 2, H = h - ins * 2;
+  const lw = (f) => Math.max(1, s * f * k);
+  const R = rng(Math.round(w * 7 + h * 13));
+  g.save(); g.strokeStyle = g.fillStyle = col; g.lineCap = 'round'; g.lineJoin = 'round';
+  if (br.corners && CORNER_OK.includes(type)) {
+    const c = Math.min(W, H) * 0.24, p = ins;
+    g.beginPath(); g.rect(X - p, Y - p, c + p, c + p); g.rect(X + W - c, Y - p, c + p, c + p); g.rect(X - p, Y + H - c, c + p, c + p); g.rect(X + W - c, Y + H - c, c + p, c + p); g.clip();
+  }
   if (type === 'double') {
-    g.lineWidth = Math.max(2, s * 0.008); g.strokeRect(X, Y, W, H);
-    g.lineWidth = Math.max(1, s * 0.003); g.strokeRect(X + pad * 0.6, Y + pad * 0.6, W - pad * 1.2, H - pad * 1.2);
-  } else if (type === 'dots') {
-    g.setLineDash([0, s * 0.03]); g.lineWidth = s * 0.012; g.strokeRect(X, Y, W, H);
-  } else if (type === 'scallop') {
-    const r = s * 0.02; g.lineWidth = Math.max(1.5, s * 0.005);
-    const edge = (x0, y0, x1, y1) => { const len = Math.hypot(x1 - x0, y1 - y0), n = Math.max(2, Math.round(len / (r * 2))); const ang = Math.atan2(y1 - y0, x1 - x0); for (let i = 0; i < n; i++) { const cx = x0 + ((i + 0.5) / n) * (x1 - x0), cy = y0 + ((i + 0.5) / n) * (y1 - y0); g.beginPath(); g.arc(cx, cy, len / n / 2, ang + Math.PI, ang + Math.PI * 2); g.stroke(); } };
-    edge(X, Y, X + W, Y); edge(X + W, Y, X + W, Y + H); edge(X + W, Y + H, X, Y + H); edge(X, Y + H, X, Y);
-  } else if (type === 'temple') {
-    const th = s * 0.05, n = Math.max(4, Math.round(w / th));
-    for (const [yy, dir] of [[y + pad * 0.4, 1], [y + h - pad * 0.4, -1]]) {
-      g.beginPath(); for (let i = 0; i < n; i++) { const x0 = x + (i / n) * w, x1 = x + ((i + 1) / n) * w; g.moveTo(x0, yy); g.lineTo((x0 + x1) / 2, yy + dir * th); g.lineTo(x1, yy); } g.fill();
-      g.fillRect(x, dir > 0 ? y : yy, w, pad * 0.4);
+    g.lineWidth = lw(0.008); g.strokeRect(X, Y, W, H);
+    const d = s * 0.02 * Math.sqrt(k); g.lineWidth = lw(0.0028); g.strokeRect(X + d, Y + d, W - 2 * d, H - 2 * d);
+  } else if (type === 'arch') {
+    const cx = x + w / 2, r = Math.min(W / 2, H * 0.42);
+    const arch = (o) => { g.beginPath(); g.moveTo(cx - r + o, Y + H - o); g.lineTo(cx - r + o, Y + r); g.arc(cx, Y + r, r - o, Math.PI, 0); g.lineTo(cx + r - o, Y + H - o); g.closePath(); g.stroke(); };
+    g.lineWidth = lw(0.007); arch(0); g.lineWidth = lw(0.0025); arch(s * 0.018 * Math.sqrt(k));
+  } else if (type === 'ticket') {
+    const rc = s * 0.05 * Math.sqrt(k), rn = s * 0.035 * Math.sqrt(k), P = Math.PI;
+    g.lineWidth = lw(0.005); g.beginPath();
+    g.moveTo(X + rc, Y); g.lineTo(X + W - rc, Y); g.arc(X + W, Y, rc, P, P / 2, true);
+    g.lineTo(X + W, Y + H / 2 - rn); g.arc(X + W, Y + H / 2, rn, -P / 2, P / 2, true);
+    g.lineTo(X + W, Y + H - rc); g.arc(X + W, Y + H, rc, -P / 2, P, true);
+    g.lineTo(X + rc, Y + H); g.arc(X, Y + H, rc, 0, -P / 2, true);
+    g.lineTo(X, Y + H / 2 + rn); g.arc(X, Y + H / 2, rn, P / 2, -P / 2, true);
+    g.lineTo(X, Y + rc); g.arc(X, Y, rc, P / 2, 0, true); g.closePath(); g.stroke();
+    const d = s * 0.022; g.lineWidth = lw(0.003); g.setLineDash([s * 0.012, s * 0.012]);
+    g.beginPath(); g.moveTo(X + rc + d, Y + d); g.lineTo(X + W - rc - d, Y + d); g.moveTo(X + rc + d, Y + H - d); g.lineTo(X + W - rc - d, Y + H - d); g.stroke();
+  } else if (type === 'stamp') {
+    const t = s * 0.03 * k, rp = s * 0.011;
+    g.beginPath(); g.rect(X, Y, W, H); g.rect(X + t, Y + t, W - 2 * t, H - 2 * t); g.fill('evenodd');
+    g.fillStyle = pap;
+    const edge = (x0, y0, x1, y1) => { const len = Math.hypot(x1 - x0, y1 - y0), n = Math.max(3, Math.round(len / (rp * 2.8))); for (let i = 0; i <= n; i++) { g.beginPath(); g.arc(x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n, rp, 0, Math.PI * 2); g.fill(); } };
+    edge(X, Y, X + W, Y); edge(X + W, Y, X + W, Y + H); edge(X, Y + H, X + W, Y + H); edge(X, Y, X, Y + H);
+    g.strokeStyle = col; g.lineWidth = lw(0.0025); const d = t + s * 0.014; g.strokeRect(X + d, Y + d, W - 2 * d, H - 2 * d);
+  } else if (type === 'crop') {
+    const gp = s * 0.014, L = s * 0.08 * Math.sqrt(k); g.lineWidth = lw(0.0055);
+    eachCorner(g, X, Y, W, H, () => { g.beginPath(); g.moveTo(gp, 0); g.lineTo(gp + L, 0); g.moveTo(0, gp); g.lineTo(0, gp + L); g.stroke(); });
+    const r = s * 0.012; g.lineWidth = lw(0.0025); g.beginPath(); g.arc(x + w / 2, Y, r, 0, Math.PI * 2); g.moveTo(x + w / 2 - r * 1.8, Y); g.lineTo(x + w / 2 + r * 1.8, Y); g.moveTo(x + w / 2, Y - r * 1.8); g.lineTo(x + w / 2, Y + r * 1.8); g.stroke();
+  } else if (type === 'nameband') {
+    const bh = s * 0.06 * Math.sqrt(k), word = `${(b.name || 'Brand').toUpperCase()}   •   `;
+    for (const [yy, off] of [[y + ins * 0.5, 0], [y + h - ins * 0.5 - bh, 0.5]]) {
+      g.fillStyle = col; g.fillRect(x, yy, w, bh);
+      g.fillStyle = autoInk(col) === '#1c1a17' ? mix(col, '#000', 0.75) : pap; g.font = fontCss(b.fonts?.body || 'Inter', 700, bh * 0.5); g.textBaseline = 'middle';
+      if ('letterSpacing' in g) g.letterSpacing = `${bh * 0.1}px`;
+      const ww = g.measureText(word).width; for (let xx = x - ww * off; xx < x + w; xx += ww) g.fillText(word, xx, yy + bh / 2);
     }
+  } else if (type === 'checker') {
+    const bh = s * 0.05 * Math.sqrt(k), q = bh / 2;
+    for (const yy of [y + ins * 0.5, y + h - ins * 0.5 - bh]) for (let r = 0; r < 2; r++) for (let i = 0; x + i * q < x + w; i++) if ((i + r) % 2 === 0) g.fillRect(x + i * q, yy + r * q, q + 0.5, q + 0.5);
+  } else if (type === 'wavy') {
+    const a = s * 0.009 * Math.sqrt(k), wl = s * 0.07; g.lineWidth = lw(0.005); g.beginPath();
+    const edge = (x0, y0, x1, y1, first) => { const len = Math.hypot(x1 - x0, y1 - y0), n = Math.max(2, Math.round(len / wl)), nx = -(y1 - y0) / len, ny = (x1 - x0) / len, steps = n * 16;
+      for (let i = 0; i <= steps; i++) { const t = i / steps, o = a * Math.sin(Math.PI * 2 * n * t); const px = x0 + (x1 - x0) * t + nx * o, py = y0 + (y1 - y0) * t + ny * o; first && i === 0 ? g.moveTo(px, py) : g.lineTo(px, py); } };
+    edge(X, Y, X + W, Y, true); edge(X + W, Y, X + W, Y + H); edge(X + W, Y + H, X, Y + H); edge(X, Y + H, X, Y); g.closePath(); g.stroke();
+  } else if (type === 'stitched') {
+    g.lineWidth = lw(0.0055);
+    const edge = (x0, y0, x1, y1) => { const len = Math.hypot(x1 - x0, y1 - y0); let d = 0; g.beginPath();
+      while (d < len) { const dl = s * 0.017 * (0.8 + R() * 0.4), gap = s * 0.011 * (0.8 + R() * 0.4); const a0 = d / len, a1 = Math.min(len, d + dl) / len; g.moveTo(x0 + (x1 - x0) * a0, y0 + (y1 - y0) * a0 + (R() - 0.5) * s * 0.002); g.lineTo(x0 + (x1 - x0) * a1, y0 + (y1 - y0) * a1 + (R() - 0.5) * s * 0.002); d += dl + gap; }
+      g.stroke(); };
+    edge(X, Y, X + W, Y); edge(X + W, Y, X + W, Y + H); edge(X + W, Y + H, X, Y + H); edge(X, Y + H, X, Y);
+  } else if (type === 'torn') {
+    const th = s * 0.05 * Math.sqrt(k), st = s * 0.012;
+    for (const top of [true, false]) {
+      g.beginPath(); const e = top ? y : y + h; g.moveTo(x, e);
+      for (let xx = x; xx <= x + w + st; xx += st) { const d = th * (0.65 + R() * 0.55); g.lineTo(xx, top ? e + d : e - d); }
+      g.lineTo(x + w, e); g.closePath(); g.fill();
+    }
+  } else if (type === 'jali') {
+    const bh = s * 0.06 * Math.sqrt(k), r = bh * 0.34;
+    for (const yy of [y + ins * 0.5, y + h - ins * 0.5 - bh]) {
+      g.lineWidth = lw(0.004); g.beginPath(); g.moveTo(x, yy); g.lineTo(x + w, yy); g.moveTo(x, yy + bh); g.lineTo(x + w, yy + bh); g.stroke();
+      g.lineWidth = lw(0.0025); const my = yy + bh / 2, step = r * 1.45, n = Math.ceil(w / step) + 1, x0 = x + w / 2 - (Math.floor(n / 2)) * step;
+      g.beginPath(); for (let i = 0; i < n; i++) { g.moveTo(x0 + i * step + r, my); g.arc(x0 + i * step, my, r, 0, Math.PI * 2); } g.stroke();
+      g.beginPath(); for (let i = 0; i < n; i++) { const cx = x0 + (i + 0.5) * step, d = r * 0.22; g.moveTo(cx, my - d); g.lineTo(cx + d, my); g.lineTo(cx, my + d); g.lineTo(cx - d, my); g.closePath(); } g.fill();
+    }
+  } else if (type === 'deco') {
+    g.lineWidth = lw(0.0025); const d0 = s * 0.03; g.strokeRect(X + d0, Y + d0, W - 2 * d0, H - 2 * d0);
+    eachCorner(g, X, Y, W, H, () => {
+      g.lineWidth = lw(0.005);
+      for (let j = 0; j < 3; j++) { const d = j * s * 0.013, L = s * 0.13 - j * s * 0.03; g.beginPath(); g.moveTo(d, L); g.lineTo(d, d); g.lineTo(L, d); g.stroke(); }
+      g.lineWidth = lw(0.0025); for (let j = 1; j <= 3; j++) { g.beginPath(); g.arc(0, 0, s * (0.045 + j * 0.016), Math.PI * 0.12, Math.PI * 0.38); g.stroke(); }
+      const q = s * 0.052, dd = s * 0.011; g.beginPath(); g.moveTo(q, q - dd); g.lineTo(q + dd, q); g.lineTo(q, q + dd); g.lineTo(q - dd, q); g.closePath(); g.fill();
+    });
+  } else if (type === 'botanical') {
+    const L = s * 0.2 * Math.sqrt(k); g.lineWidth = lw(0.0055);
+    eachCorner(g, X, Y, W, H, () => {
+      const p0 = [s * 0.004, L], c = [s * 0.012, s * 0.012], p1 = [L, s * 0.004];
+      g.beginPath(); g.moveTo(...p0); g.quadraticCurveTo(...c, ...p1); g.stroke();
+      const at = (t) => [(1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * c[0] + t * t * p1[0], (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * c[1] + t * t * p1[1]];
+      const tan = (t) => Math.atan2(2 * (1 - t) * (c[1] - p0[1]) + 2 * t * (p1[1] - c[1]), 2 * (1 - t) * (c[0] - p0[0]) + 2 * t * (p1[0] - c[0]));
+      [0.18, 0.36, 0.64, 0.82].forEach((t, i) => {
+        const [px, py] = at(t), ang = tan(t) + (i % 2 ? 0.75 : -0.75) * (t < 0.5 ? -1 : 1), len = s * 0.045;
+        g.save(); g.translate(px, py); g.rotate(ang + (t < 0.5 ? Math.PI : 0));
+        g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(len / 2, len * 0.38, len, 0); g.quadraticCurveTo(len / 2, -len * 0.38, 0, 0); g.stroke();
+        g.lineWidth = lw(0.002); g.beginPath(); g.moveTo(0, 0); g.lineTo(len * 0.8, 0); g.stroke(); g.restore();
+      });
+      g.beginPath(); g.arc(s * 0.05, s * 0.05, s * 0.007, 0, Math.PI * 2); g.fill();
+    });
+  } else if (type === 'bauhaus') {
+    const bh = s * 0.085 * Math.sqrt(k), yy = y + h - ins * 0.5 - bh, cols = [col, ink(b), mix(col, pap, 0.45)];
+    g.lineWidth = lw(0.004); g.beginPath(); g.moveTo(x, y + ins * 0.5 + bh * 0.3); g.lineTo(x + w, y + ins * 0.5 + bh * 0.3); g.stroke();
+    for (let i = 0, xx = x; xx < x + w; i++, xx += bh) {
+      g.fillStyle = cols[i % 3]; g.beginPath();
+      const m = i % 4;
+      if (m === 0) { g.moveTo(xx, yy + bh); g.arc(xx, yy + bh, bh, -Math.PI / 2, 0); g.closePath(); }
+      else if (m === 1) { g.arc(xx + bh / 2, yy + bh, bh / 2, Math.PI, 0); g.closePath(); }
+      else if (m === 2) { g.rect(xx + bh * 0.12, yy + bh * 0.12, bh * 0.76, bh * 0.88); }
+      else { g.arc(xx + bh / 2, yy + bh / 2, bh * 0.4, 0, Math.PI * 2); }
+      g.fill();
+    }
+  } else if (type === 'cutcorner') {
+    const cham = (o, c) => { g.beginPath(); g.moveTo(X + o + c, Y + o); g.lineTo(X + W - o - c, Y + o); g.lineTo(X + W - o, Y + o + c); g.lineTo(X + W - o, Y + H - o - c); g.lineTo(X + W - o - c, Y + H - o); g.lineTo(X + o + c, Y + H - o); g.lineTo(X + o, Y + H - o - c); g.lineTo(X + o, Y + o + c); g.closePath(); g.stroke(); };
+    const c = s * 0.06, d = s * 0.016 * Math.sqrt(k);
+    g.lineWidth = lw(0.007); cham(0, c); g.lineWidth = lw(0.0025); cham(d, c - d * 0.4);
+  } else if (type === 'sticker') {
+    const lwv = lw(0.022); g.lineWidth = lwv; g.beginPath(); g.roundRect(X + lwv / 2, Y + lwv / 2, W - lwv, H - lwv, s * 0.09); g.stroke();
   } else if (type === 'image' && br.image) {
-    nineSlice(g, br.image, x + pad * 0.5, y + pad * 0.5, w - pad, h - pad, t);
+    nineSlice(g, br.image, x + ins * 0.5, y + ins * 0.5, w - ins, h - ins, s * (br.size || 0.06));
   }
   g.restore();
+}
+// small live preview of a border in the current colours (sidebar tiles)
+export function borderTile(b, type, W = 64, H = 84) {
+  const c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2; const g = c.getContext('2d');
+  g.fillStyle = paper(b); g.fillRect(0, 0, W * 2, H * 2);
+  paintBorder(g, 0, 0, W * 2, H * 2, { ...b, border: { ...b.border, type, image: b.border?.image } }, W * 2);
+  return c;
 }
 
 // ---------- label layout ----------
@@ -357,8 +397,8 @@ function paintPanel(g, x, y, w, h, role, b) {
   } else if (b.style === 'minimal') {
     g.fillStyle = b.accent; g.fillRect(x, y + h - h * 0.06, w, h * 0.06);
     if (role === 'front') {
-      drawLogo(g, b, cx, y + h * 0.42 + ly, s * 0.42);
-      text(g, b.name, cx, y + h * 0.72, s * 0.07 * ts, fg, { font: disp, weight: 400, maxW: w * 0.85 });
+      if (b.logoHasName) drawLogo(g, b, cx, y + h * 0.5 + ly, s * 0.62);
+      else { drawLogo(g, b, cx, y + h * 0.42 + ly, s * 0.42); text(g, b.name, cx, y + h * 0.72, s * 0.07 * ts, fg, { font: disp, weight: 400, maxW: w * 0.85 }); }
       text(g, b.detail.toUpperCase(), cx, y + h * 0.84, s * 0.032 * ts, mix(fg, paper(b), 0.35), { font: body, spacing: s * 0.006, maxW: w * 0.85 });
     } else if (role === 'back') {
       text(g, b.tagline, cx, y + h * 0.3, s * 0.06 * ts, fg, { font: disp, weight: 400, italic: true, maxW: w * 0.85 });
@@ -369,8 +409,8 @@ function paintPanel(g, x, y, w, h, role, b) {
     // pattern bands top & bottom, framed centre field with name in display type
     g.fillStyle = b.accent; g.fillRect(x, y + h * 0.2, w, s * 0.012); g.fillRect(x, y + h * 0.8 - s * 0.012, w, s * 0.012);
     if (role === 'front') {
-      drawLogo(g, b, cx, y + h * 0.4 + ly, s * 0.38);
-      text(g, b.name, cx, y + h * 0.6, s * 0.1 * ts, ac, { font: disp, weight: 700, maxW: w * 0.85 });
+      if (b.logoHasName) drawLogo(g, b, cx, y + h * 0.46 + ly, s * 0.58);
+      else { drawLogo(g, b, cx, y + h * 0.4 + ly, s * 0.38); text(g, b.name, cx, y + h * 0.6, s * 0.1 * ts, ac, { font: disp, weight: 700, maxW: w * 0.85 }); }
       text(g, b.tagline, cx, y + h * 0.7, s * 0.04 * ts, fg, { font: body, weight: 500, maxW: w * 0.85 });
     } else if (role === 'back') {
       text(g, b.tagline, cx, y + h * 0.42, s * 0.06 * ts, ac, { font: disp, weight: 700, maxW: w * 0.85 });

@@ -1,11 +1,11 @@
 // The "design plan": a small JSON object that fully describes a packaging design.
 // The AI (or the built-in designer) writes plans; Wrapt's engine draws them.
 // Because a plan is data, not a picture, every result stays editable.
-import { contrast, luminance, mix, isDark, autoInk, readable, averageColor, logoCoverage, paper, ink, FONTS, PATTERNS, BORDERS, ICONS, LOGO_SHAPES } from './art.js';
+import { contrast, luminance, mix, isDark, autoInk, readable, averageColor, logoCoverage, paper, ink, FONTS, PATTERNS, BORDERS, borderType } from './art.js';
 
 export const PRODUCTS = ['can', 'box', 'tub', 'jar', 'pouch'];
 export const STYLES = ['classic', 'bold', 'minimal', 'heritage'];
-export const PLAN_KEYS = { product: PRODUCTS, style: STYLES, fontsDisplay: Object.keys(FONTS), pattern: Object.keys(PATTERNS).filter((p) => p !== 'none').concat('none'), border: Object.keys(BORDERS).filter((b) => b !== 'image'), logoShape: LOGO_SHAPES, icon: Object.keys(ICONS), finish: ['gloss', 'matte', 'metallic'], light: ['studio', 'sunlit', 'dramatic'] };
+export const PLAN_KEYS = { product: PRODUCTS, style: STYLES, fontsDisplay: Object.keys(FONTS), pattern: Object.keys(PATTERNS).filter((p) => p !== 'none').concat('none'), border: Object.keys(BORDERS).filter((b) => b !== 'image'), finish: ['gloss', 'matte', 'metallic'], light: ['studio', 'sunlit', 'dramatic'] };
 
 /* Example plan
 {
@@ -13,7 +13,7 @@ export const PLAN_KEYS = { product: PRODUCTS, style: STYLES, fontsDisplay: Objec
   product: "jar", style: "heritage",
   palette: { pack: "#5b1a18", accent: "#e0a83a", background: "#f1e4cf" },
   fonts: { display: "DM Serif Display", body: "Inter" },
-  pattern: { type: "kalamkari", opacity: 0.16 }, border: { type: "temple" },
+  pattern: { type: "kalamkari", opacity: 0.16 }, border: { type: "jali" },
   logo: { shape: "badge", icon: "fruit", monogram: "AK" },
   finish: "gloss", light: "sunlit",
   reasoning: { colour: "...", type: "...", layout: "..." }
@@ -85,31 +85,27 @@ export function designLocally(brief, { refColors = [], hasLogo = false } = {}) {
     concept: 'Premium', name, tagline, detail, product, style: 'classic',
     palette: { pack: dark, accent: mix(acc, '#d8b16a', 0.35), background: mix(dark, '#f4ecdf', 0.85) },
     fonts: { display: hindi ? 'Tiro Devanagari Hindi' : 'DM Serif Display', body: 'Inter' },
-    pattern: { type: traditional ? 'kalamkari' : 'none', opacity: 0.12 }, border: { type: 'double' },
-    logo: { shape: 'badge', icon, monogram: mono }, finish: product === 'can' ? 'metallic' : 'gloss', light: 'dramatic',
+    pattern: { type: traditional ? 'kalamkari' : 'none', opacity: 0.12 }, border: { type: KW(t, ['luxury', 'luxe', 'gift', 'perfume']) ? 'deco' : KW(t, ['natural', 'organic', 'herbal', 'tea', 'tulsi', 'skin']) ? 'botanical' : traditional ? 'arch' : 'double' }, finish: product === 'can' ? 'metallic' : 'gloss', light: 'dramatic',
     reasoning: { colour: `A deep ${isDark(base) ? 'base' : 'version of your colour'} with a gold-leaning accent reads as expensive and lets the logo glow.`, type: 'A high-contrast serif signals craft and quality, like a patisserie or a fine tea house.', layout: 'Classic centred layout with a fine double rule — calm, symmetrical, and easy to trust.' },
   };
   const minimal = {
     concept: 'Minimal', name, tagline, detail, product, style: 'minimal',
     palette: { pack: isDark(base) ? acc : base, accent: isDark(base) ? base : acc, background: '#f2f0eb' },
     fonts: { display: hindi ? 'Mukta' : 'Instrument Serif', body: hindi ? 'Mukta' : 'Inter' },
-    pattern: { type: 'none', opacity: 0 }, border: { type: 'none' },
-    logo: { shape: 'wordmark', icon: 'none', monogram: mono }, finish: 'matte', light: 'studio',
+    pattern: { type: 'none', opacity: 0 }, border: { type: KW(t, ['handmade', 'craft', 'natural']) ? 'stitched' : 'crop' }, finish: 'matte', light: 'studio',
     reasoning: { colour: 'A near-white pack with one strong colour band: clean, modern, and stands out on a crowded shelf.', type: 'An elegant serif name with a quiet sans for details keeps it airy.', layout: 'Lots of empty space and one bottom band — the product feels honest and contemporary.' },
   };
   const third = traditional ? {
     concept: 'Traditional', name, tagline, detail, product, style: 'heritage',
     palette: { pack: mix(acc, '#fff6e6', 0.78), accent: isDark(base) ? base : mix(base, '#6e1423', 0.5), background: '#f6e7cf' },
     fonts: { display: hindi ? 'Tiro Devanagari Hindi' : 'DM Serif Display', body: hindi ? 'Mukta' : 'Inter' },
-    pattern: { type: KW(t, ['rangoli', 'kolam', 'festive', 'diwali']) ? 'rangoli' : KW(t, ['tribal', 'warli', 'village']) ? 'warli' : 'blockprint', opacity: 0.55 }, border: { type: 'temple' },
-    logo: { shape: 'arch', icon, monogram: mono }, finish: 'matte', light: 'sunlit',
+    pattern: { type: KW(t, ['rangoli', 'kolam', 'festive', 'diwali']) ? 'rangoli' : KW(t, ['tribal', 'warli', 'village']) ? 'warli' : 'blockprint', opacity: 0.55 }, border: { type: KW(t, ['gift', 'diwali', 'festive', 'mithai']) ? 'stamp' : 'jali' }, finish: 'matte', light: 'sunlit',
     reasoning: { colour: 'Warm cream with a rich festive accent feels homemade and familiar — like something from nani\'s kitchen.', type: 'A warm serif headline with a simple body font keeps it traditional but readable.', layout: 'Indian block-print bands frame the label, like the border of a sari — instantly desi, never cluttered.' },
   } : {
     concept: 'Playful', name, tagline, detail, product, style: 'bold',
     palette: { pack: isDark(base) ? mix(acc, '#ffffff', 0.15) : base, accent: isDark(base) ? base : mix(acc, '#000000', 0.1), background: mix(acc, '#ffffff', 0.75) },
     fonts: { display: hindi ? 'Mukta' : 'Bebas Neue', body: 'Space Grotesk' },
-    pattern: { type: 'dots', opacity: 0.18 }, border: { type: 'none' },
-    logo: { shape: 'stamp', icon, monogram: mono }, finish: 'gloss', light: 'sunlit',
+    pattern: { type: 'dots', opacity: 0.18 }, border: { type: KW(t, ['kids', 'candy', 'ice cream', 'icecream']) ? 'wavy' : KW(t, ['coffee', 'snack', 'chips', 'cafe']) ? 'ticket' : 'checker' }, finish: 'gloss', light: 'sunlit',
     reasoning: { colour: 'A bright pack with a contrasting diagonal band grabs attention and feels fun and young.', type: 'A tall condensed display font is loud and confident, perfect for Instagram.', layout: 'An oversized logo and a dynamic diagonal stripe give it energy.' },
   };
   const order = kidsy && !traditional ? [third, minimal, premium] : traditional ? [third, premium, minimal] : [premium, minimal, third];
@@ -122,12 +118,14 @@ export function refineLocally(plan, instruction) {
   const col = Object.entries(COLOR_WORDS).find(([w]) => new RegExp(`\\b${w}\\b`).test(t));
   if (col && KW(t, ['accent', 'text', 'border', 'gold'])) { p.palette.accent = col[1]; did.push(`accent → ${col[0]}`); }
   else if (col) { p.palette.pack = col[1]; did.push(`pack colour → ${col[0]}`); }
-  if (KW(t, ['modern', 'clean', 'simple', 'minimal'])) { p.style = 'minimal'; p.fonts.display = 'Instrument Serif'; p.pattern.type = 'none'; p.border.type = 'none'; did.push('cleaner, more minimal'); }
-  if (KW(t, ['premium', 'luxury', 'expensive', 'elegant', 'classy'])) { p.style = 'classic'; p.palette.pack = mix(p.palette.pack, '#000000', 0.5); p.palette.accent = '#c9a35a'; p.fonts.display = 'DM Serif Display'; p.border.type = 'double'; p.finish = 'gloss'; p.light = 'dramatic'; did.push('more premium'); }
+  if (KW(t, ['modern', 'clean', 'simple', 'minimal'])) { p.style = 'minimal'; p.fonts.display = 'Instrument Serif'; p.pattern.type = 'none'; p.border.type = 'crop'; did.push('cleaner, more minimal'); }
+  if (KW(t, ['premium', 'luxury', 'expensive', 'elegant', 'classy'])) { p.style = 'classic'; p.palette.pack = mix(p.palette.pack, '#000000', 0.5); p.palette.accent = '#c9a35a'; p.fonts.display = 'DM Serif Display'; p.border.type = 'deco'; p.finish = 'gloss'; p.light = 'dramatic'; did.push('more premium'); }
   if (KW(t, ['fun', 'playful', 'young', 'bright', 'loud'])) { p.style = 'bold'; p.fonts.display = 'Bebas Neue'; p.pattern = { type: 'dots', opacity: 0.2 }; did.push('more playful'); }
-  if (KW(t, ['traditional', 'desi', 'indian', 'ethnic', 'festive', 'diwali'])) { p.style = 'heritage'; p.border.type = 'temple'; p.pattern = { type: KW(t, ['diwali', 'festive']) ? 'rangoli' : 'blockprint', opacity: 0.5 }; did.push('more traditional'); }
+  if (KW(t, ['traditional', 'desi', 'indian', 'ethnic', 'festive', 'diwali'])) { p.style = 'heritage'; p.border.type = 'jali'; p.pattern = { type: KW(t, ['diwali', 'festive']) ? 'rangoli' : 'blockprint', opacity: 0.5 }; did.push('more traditional'); }
   for (const pat of Object.keys(PATTERNS)) if (t.includes(pat)) { p.pattern = { type: pat, opacity: p.pattern?.opacity || 0.3 }; did.push(`${PATTERNS[pat]} pattern`); }
   if (KW(t, ['no pattern', 'remove pattern', 'without pattern'])) { p.pattern.type = 'none'; did.push('pattern removed'); }
+  for (const [k, v] of Object.entries(BORDERS)) if (k !== 'none' && k !== 'image' && t.includes(v.toLowerCase())) { p.border = { type: k }; did.push(`${v} border`); }
+  if (KW(t, ['no border', 'remove border', 'without border'])) { p.border = { type: 'none' }; did.push('border removed'); }
   if (KW(t, ['bigger logo', 'larger logo', 'logo bigger'])) { p.logoScale = Math.min(1.4, (p.logoScale || 1) + 0.2); did.push('bigger logo'); }
   if (KW(t, ['smaller logo', 'logo smaller'])) { p.logoScale = Math.max(0.5, (p.logoScale || 1) - 0.2); did.push('smaller logo'); }
   for (const prod of PRODUCTS) if (new RegExp(`\\b${prod}\\b`).test(t)) { p.product = prod; did.push(`on a ${prod}`); }
@@ -151,8 +149,7 @@ export function normalizePlan(p, { hasLogo } = {}) {
   p.fonts = { display: pick(p.fonts?.display, Object.keys(FONTS), 'DM Serif Display'), body: pick(p.fonts?.body, Object.keys(FONTS), 'Inter') };
   if (/[ऀ-ॿ]/.test(`${p.name}${p.tagline}`) && !['Tiro Devanagari Hindi', 'Mukta'].includes(p.fonts.display)) p.fonts.display = 'Tiro Devanagari Hindi';
   p.pattern = { type: pick(p.pattern?.type, Object.keys(PATTERNS), 'none'), opacity: Math.min(0.7, Math.max(0, +p.pattern?.opacity || 0.18)) };
-  p.border = { type: pick(p.border?.type, Object.keys(BORDERS), 'none') };
-  p.logo = { shape: pick(p.logo?.shape, LOGO_SHAPES, 'badge'), icon: pick(p.logo?.icon, Object.keys(ICONS), 'star'), monogram: String(p.logo?.monogram || '').slice(0, 2) };
+  p.border = { type: borderType(p.border?.type) };
   p.finish = pick(p.finish, ['gloss', 'matte', 'metallic'], 'gloss');
   p.light = pick(p.light, ['studio', 'sunlit', 'dramatic'], 'studio');
   p.name = String(p.name || 'Your Brand').slice(0, 40); p.tagline = String(p.tagline || '').slice(0, 60); p.detail = String(p.detail || '').slice(0, 50);
@@ -170,7 +167,7 @@ export function audit(b, product) {
   const c2 = contrast(b.accent, pap);
   if (c2 < 1.6 && b.style !== 'bold') out.push({ level: 'mid', msg: 'Accent colour almost disappears on the pack.', fix: 'Boost accent', patch: { accent: readable(b.accent, pap, 2.4) } });
   // logos that are mostly solid (round badges etc.) bring their own background, so they can't blend in
-  if (b.logo && !b.logoPlate && b.logoSource !== 'ai' && logoCoverage(b.logo) < 0.5) {
+  if (b.logo && !b.logoPlate && b.logoSource === 'upload' && logoCoverage(b.logo) < 0.5) {
     const lc = contrast(averageColor(b.logo), pap);
     if (lc < 1.5) out.push({ level: 'high', msg: 'Your logo blends into the pack colour.', fix: 'Add a logo badge', patch: { logoPlate: true } });
   }
