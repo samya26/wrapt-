@@ -171,6 +171,8 @@ export function openLogoStudio({ name = '', brief = '', colors = [], vibes = [],
   $('#ls-skip').textContent = onSkip ? 'Skip, use my name' : 'Cancel';
   $('#ls-tabs').style.visibility = 'visible'; S.ttab = 'type';
   $('#lstudio').showModal();
+  document.querySelectorAll('#lstudio .jsteps li').forEach((li) => { const j = +li.dataset.j; li.classList.toggle('on', j === 4); li.classList.toggle('done', j < 4); li.classList.toggle('skip', false); });
+  $('.ls-journey').hidden = !onSkip;
   if (spec) { // editing an existing logo
     S.options = [spec, ...variations(spec)]; S.sel = 0; showResults(); $('#ls-res-note').textContent = '';
     loadFonts(...new Set(S.options.map((o) => o.font))).then(() => { renderGrid(); renderTweak(); });
@@ -185,7 +187,7 @@ export function initLogoStudio() {
     if (d.lshape !== undefined) { S.shape = d.lshape; $$('[data-lshape]').forEach((x) => x.classList.toggle('on', x === b)); }
     if (d.lc !== undefined) { if (!d.lc) S.colors = []; else S.colors = S.colors.includes(d.lc) ? S.colors.filter((c) => c !== d.lc) : [...S.colors, d.lc].slice(-2); renderMake(); }
     if (d.pen) { pad.pen = +d.pen; pad.tool = 'pen'; $$('.ls-tools [data-pen], .ls-tools [data-tool]').forEach((x) => x.classList.toggle('on', x === b)); }
-    if (d.tool === 'eraser') { pad.tool = 'eraser'; $$('.ls-tools [data-pen], .ls-tools [data-tool]').forEach((x) => x.classList.toggle('on', x === b)); }
+    if (d.tool) { pad.tool = d.tool; $$('.ls-tools [data-pen], .ls-tools [data-tool]').forEach((x) => x.classList.toggle('on', x === b)); }
     if (d.sact === 'mirror') { pad.mirror = !pad.mirror; b.classList.toggle('on', pad.mirror); pad.draw(); }
     if (d.sact === 'undo') pad.undo();
     if (d.sact === 'clear') pad.clear();

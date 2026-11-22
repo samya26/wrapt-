@@ -42,6 +42,30 @@ export function extractPalette(img) {
   return [main, accent, ...cols.slice(1)];
 }
 // Share of the logo's square that is solid (a badge-style logo carries its own background).
+// are the 4 corners (nearly) the same colour? → a plain background we can remove
+function cornerData(img) {
+  const S = 96, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0, S, S); const d = g.getImageData(0, 0, S, S).data;
+  const px = (x, y) => { const i = (y * S + x) * 4; return [d[i], d[i + 1], d[i + 2]]; };
+  return [px(2, 2), px(S - 3, 2), px(2, S - 3), px(S - 3, S - 3)];
+}
+export function plainCorners(img) {
+  const cs = cornerData(img), dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  return cs.every((c) => dist(c, cs[0]) < 28);
+}
+// flood-fill the background away from the edges (soft edge so it doesn't look cut out)
+export function removeBackground(img) {
+  const W = img.width, H = img.height, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+  const im = g.getImageData(0, 0, W, H), d = im.data, bg = cornerData(img)[0], seen = new Uint8Array(W * H), q = [];
+  const near = (i, tol) => Math.hypot(d[i * 4] - bg[0], d[i * 4 + 1] - bg[1], d[i * 4 + 2] - bg[2]) < tol;
+  for (let x = 0; x < W; x++) q.push(x, (H - 1) * W + x); for (let y = 0; y < H; y++) q.push(y * W, y * W + W - 1);
+  while (q.length) { const i = q.pop(); if (seen[i] || !near(i, 60)) continue; seen[i] = 1; const x = i % W, y = (i / W) | 0;
+    if (x > 0) q.push(i - 1); if (x < W - 1) q.push(i + 1); if (y > 0) q.push(i - W); if (y < H - 1) q.push(i + W); }
+  for (let i = 0; i < W * H; i++) if (seen[i]) { const dd = Math.hypot(d[i * 4] - bg[0], d[i * 4 + 1] - bg[1], d[i * 4 + 2] - bg[2]); d[i * 4 + 3] = Math.min(255, Math.max(0, (dd - 25) * 7)); }
+  g.putImageData(im, 0, 0);
+  return c;
+}
 export function logoCoverage(img) {
   const c = document.createElement('canvas'); c.width = c.height = 48;
   const g = c.getContext('2d'); const k = 48 / Math.max(img.width, img.height);
@@ -349,6 +373,56 @@ export function borderTile(b, type, W = 64, H = 84) {
   return c;
 }
 
+// ---------- centre designs: a shape behind the logo that changes the whole feel ----------
+export const CENTRES = { none: 'None', spotlight: 'Spotlight', frame: 'Label panel', arch: 'Arch', seal: 'Seal', sunburst: 'Sunburst', band: 'Band', sash: 'Diagonal', block: 'Colour block', split: 'Split', bigtype: 'Big type', halftone: 'Halftone' };
+const LOGO_Y = { classic: 0.44, bold: 0.38, minimal: 0.5, heritage: 0.46 };
+function paintCentre(g, x, y, w, h, b, s) {
+  const t = b.centre || 'none'; if (t === 'none') return;
+  const pap = paper(b), dark = isDark(pap);
+  const tint = dark ? mix(pap, '#ffffff', 0.12) : mix(pap, b.accent, 0.17);
+  const lineC = readable(b.accent, pap, 2.2), wk = b._wrapK || 1;
+  const cx = x + w / 2, cy = y + h * (LOGO_Y[b.style] ?? 0.44) + (b.logoY ?? 0) * h;
+  g.save(); g.fillStyle = tint; g.strokeStyle = lineC; g.lineWidth = Math.max(1, s * 0.004);
+  if (t === 'spotlight') { g.beginPath(); g.arc(cx, cy, s * 0.37, 0, Math.PI * 2); g.fill(); }
+  else if (t === 'frame') {
+    const fw = Math.min(w * 0.74 * wk, s * 0.9), fh = h * 0.62;
+    g.fillStyle = dark ? mix(pap, '#ffffff', 0.1) : mix(pap, '#ffffff', 0.6);
+    g.beginPath(); g.roundRect(cx - fw / 2, cy - fh * 0.42, fw, fh, s * 0.05); g.fill(); g.stroke();
+  } else if (t === 'arch') {
+    const aw = Math.min(w * 0.66 * wk, s * 0.72), r = aw / 2, top = y + h * 0.1, bot = y + h * 0.92;
+    const path = (o) => { g.beginPath(); g.moveTo(cx - r + o, bot - o); g.lineTo(cx - r + o, top + r); g.arc(cx, top + r, r - o, Math.PI, 0); g.lineTo(cx + r - o, bot - o); g.closePath(); };
+    path(0); g.fill(); path(s * 0.018); g.stroke();
+  } else if (t === 'seal') {
+    const R = s * 0.37, n = 30; g.beginPath();
+    for (let i = 0; i <= n * 2; i++) { const a = (i / (n * 2)) * Math.PI * 2, rr = i % 2 ? R * 0.95 : R; g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
+    g.fill(); g.setLineDash([s * 0.012, s * 0.01]); g.beginPath(); g.arc(cx, cy, R * 0.86, 0, Math.PI * 2); g.stroke();
+  } else if (t === 'sunburst') {
+    const n = 32, R = Math.hypot(w, h);
+    for (let i = 0; i < n; i += 2) { const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, a0, a1); g.closePath(); g.fill(); }
+  } else if (t === 'band') {
+    const bh = s * 0.26; g.fillRect(x, cy - bh / 2, w, bh);
+    g.fillStyle = lineC; g.fillRect(x, cy - bh / 2 - s * 0.012, w, s * 0.004); g.fillRect(x, cy + bh / 2 + s * 0.008, w, s * 0.004);
+  } else if (t === 'sash') { g.translate(cx, cy); g.rotate(-0.35); g.fillRect(-w * 1.5, -s * 0.16, w * 3, s * 0.32); }
+  else if (t === 'block') { const top = y + h * 0.66; g.fillRect(x, top, w, h - (top - y)); g.fillStyle = lineC; g.fillRect(x, top, w, s * 0.006); }
+  else if (t === 'split') { g.fillRect(x, y, w / 2, h); }
+  else if (t === 'bigtype') {
+    const word = (b.name || 'Brand').split(/\s+/)[0].toUpperCase();
+    g.font = fontCss(b.fonts?.display || 'Inter', 700, h * 0.42); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(word, cx, cy);
+  } else if (t === 'halftone') {
+    const st = s * 0.034, R = s * 0.62; g.fillStyle = dark ? mix(pap, '#ffffff', 0.2) : mix(pap, b.accent, 0.3);
+    for (let yy = y; yy < y + h; yy += st) for (let xx = x; xx < x + w; xx += st) { const d = Math.hypot(xx - cx, yy - cy), k = 1 - d / R; if (k > 0) { g.beginPath(); g.arc(xx, yy, st * 0.42 * k, 0, Math.PI * 2); g.fill(); } }
+  }
+  g.restore();
+}
+export function centreTile(b, type, W = 64, H = 84) {
+  const c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2; const g = c.getContext('2d');
+  const bb = { ...b, centre: type, logoY: 0 }; const S = Math.min(W, H) * 2;
+  g.fillStyle = paper(bb); g.fillRect(0, 0, W * 2, H * 2);
+  paintCentre(g, 0, 0, W * 2, H * 2, bb, S);
+  g.fillStyle = ink(bb); g.beginPath(); g.arc(W, H * 2 * (LOGO_Y[bb.style] ?? 0.44), S * 0.12, 0, Math.PI * 2); g.fill();
+  return c;
+}
+
 // ---------- label layout ----------
 function grain(g, w, h, amt = 6) {
   const img = g.getImageData(0, 0, w, h), d = img.data;
@@ -378,6 +452,8 @@ function paintPanel(g, x, y, w, h, role, b) {
   g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
   g.fillStyle = paper(b); g.fillRect(x, y, w, h);
   paintPattern(g, x, y, w, h, b, s);
+  if (role === 'front') paintCentre(g, x, y, w, h, b, s);
+  const wk = b._wrapK || 1; // on round packs only ~2/3 of the front is visible, so text stays inside that
   const cx = x + w / 2, cy = y + h / 2, fg = ink(b), ac = accentOn(b);
   const ly = (b.logoY ?? 0) * h;
   const side = (str, size, col, opts) => { g.save(); g.translate(cx, cy); g.rotate(-Math.PI / 2); text(g, str, 0, 0, size, col, { maxW: h * 0.85, ...opts }); g.restore(); };
@@ -387,22 +463,22 @@ function paintPanel(g, x, y, w, h, role, b) {
     g.beginPath(); g.moveTo(x, y + h * 0.72); g.lineTo(x + w, y + h * 0.52); g.lineTo(x + w, y + h * 0.66); g.lineTo(x, y + h * 0.86); g.fill();
     if (role === 'front') {
       drawLogo(g, b, cx, y + h * 0.38 + ly, s * 0.8);
-      text(g, b.tagline.toUpperCase(), cx, y + h * 0.93, s * 0.045 * ts, fg, { font: body, spacing: s * 0.006, maxW: w * 0.9 });
+      text(g, b.tagline.toUpperCase(), cx, y + h * 0.93, s * 0.045 * ts, fg, { font: body, spacing: s * 0.006, maxW: w * 0.9 * wk });
     } else if (role === 'back') {
       drawLogo(g, b, cx, y + h * 0.26, s * 0.36);
-      text(g, b.tagline, cx, y + h * 0.48, s * 0.05 * ts, fg, { font: body, weight: 500, maxW: w * 0.85 });
-      text(g, b.detail, cx, y + h * 0.94, s * 0.04 * ts, fg, { font: body, weight: 500, maxW: w * 0.85 });
+      text(g, b.tagline, cx, y + h * 0.48, s * 0.05 * ts, fg, { font: body, weight: 500, maxW: w * 0.85 * wk });
+      text(g, b.detail, cx, y + h * 0.94, s * 0.04 * ts, fg, { font: body, weight: 500, maxW: w * 0.85 * wk });
     } else if (role === 'side') side(b.name.toUpperCase(), Math.min(w * 0.42, h * 0.11) * ts, fg, { font: disp, weight: 800, spacing: 4 });
     else drawLogo(g, b, cx, cy, s * 0.7);
   } else if (b.style === 'minimal') {
     g.fillStyle = b.accent; g.fillRect(x, y + h - h * 0.06, w, h * 0.06);
     if (role === 'front') {
       if (b.logoHasName) drawLogo(g, b, cx, y + h * 0.5 + ly, s * 0.62);
-      else { drawLogo(g, b, cx, y + h * 0.42 + ly, s * 0.42); text(g, b.name, cx, y + h * 0.72, s * 0.07 * ts, fg, { font: disp, weight: 400, maxW: w * 0.85 }); }
-      text(g, b.detail.toUpperCase(), cx, y + h * 0.84, s * 0.032 * ts, mix(fg, paper(b), 0.35), { font: body, spacing: s * 0.006, maxW: w * 0.85 });
+      else { drawLogo(g, b, cx, y + h * 0.42 + ly, s * 0.42); text(g, b.name, cx, y + h * 0.72, s * 0.07 * ts, fg, { font: disp, weight: 400, maxW: w * 0.85 * wk }); }
+      text(g, b.detail.toUpperCase(), cx, y + h * 0.84, s * 0.032 * ts, mix(fg, paper(b), 0.35), { font: body, spacing: s * 0.006, maxW: w * 0.85 * wk });
     } else if (role === 'back') {
-      text(g, b.tagline, cx, y + h * 0.3, s * 0.06 * ts, fg, { font: disp, weight: 400, italic: true, maxW: w * 0.85 });
-      text(g, b.detail, cx, y + h * 0.8, s * 0.035 * ts, mix(fg, paper(b), 0.35), { font: body, weight: 500, maxW: w * 0.85 });
+      text(g, b.tagline, cx, y + h * 0.3, s * 0.06 * ts, fg, { font: disp, weight: 400, italic: true, maxW: w * 0.85 * wk });
+      text(g, b.detail, cx, y + h * 0.8, s * 0.035 * ts, mix(fg, paper(b), 0.35), { font: body, weight: 500, maxW: w * 0.85 * wk });
     } else if (role === 'side') side(b.name, Math.min(w * 0.3, h * 0.08) * ts, fg, { font: disp, weight: 400 });
     else drawLogo(g, b, cx, cy, s * 0.5);
   } else if (b.style === 'heritage') {
@@ -410,23 +486,23 @@ function paintPanel(g, x, y, w, h, role, b) {
     g.fillStyle = b.accent; g.fillRect(x, y + h * 0.2, w, s * 0.012); g.fillRect(x, y + h * 0.8 - s * 0.012, w, s * 0.012);
     if (role === 'front') {
       if (b.logoHasName) drawLogo(g, b, cx, y + h * 0.46 + ly, s * 0.58);
-      else { drawLogo(g, b, cx, y + h * 0.4 + ly, s * 0.38); text(g, b.name, cx, y + h * 0.6, s * 0.1 * ts, ac, { font: disp, weight: 700, maxW: w * 0.85 }); }
-      text(g, b.tagline, cx, y + h * 0.7, s * 0.04 * ts, fg, { font: body, weight: 500, maxW: w * 0.85 });
+      else { drawLogo(g, b, cx, y + h * 0.4 + ly, s * 0.38); text(g, b.name, cx, y + h * 0.6, s * 0.1 * ts, ac, { font: disp, weight: 700, maxW: w * 0.85 * wk }); }
+      text(g, b.tagline, cx, y + h * 0.7, s * 0.04 * ts, fg, { font: body, weight: 500, maxW: w * 0.85 * wk });
     } else if (role === 'back') {
-      text(g, b.tagline, cx, y + h * 0.42, s * 0.06 * ts, ac, { font: disp, weight: 700, maxW: w * 0.85 });
-      text(g, b.detail, cx, y + h * 0.58, s * 0.04 * ts, fg, { font: body, weight: 500, maxW: w * 0.85 });
+      text(g, b.tagline, cx, y + h * 0.42, s * 0.06 * ts, ac, { font: disp, weight: 700, maxW: w * 0.85 * wk });
+      text(g, b.detail, cx, y + h * 0.58, s * 0.04 * ts, fg, { font: body, weight: 500, maxW: w * 0.85 * wk });
     } else if (role === 'side') side(b.name, Math.min(w * 0.35, h * 0.09) * ts, ac, { font: disp, weight: 700 });
     else drawLogo(g, b, cx, cy, s * 0.62);
   } else {
     // classic: centred logo, small caps
     if (role === 'front') {
       drawLogo(g, b, cx, y + h * 0.44 + ly, s * 0.6);
-      text(g, b.tagline.toUpperCase(), cx, y + h * 0.8, s * 0.042 * ts, ac, { font: body, spacing: s * 0.008, maxW: w * 0.8 });
-      text(g, b.detail, cx, y + h * 0.87, s * 0.034 * ts, fg, { font: body, weight: 500, maxW: w * 0.8 });
+      text(g, b.tagline.toUpperCase(), cx, y + h * 0.8, s * 0.042 * ts, ac, { font: body, spacing: s * 0.008, maxW: w * 0.8 * wk });
+      text(g, b.detail, cx, y + h * 0.87, s * 0.034 * ts, fg, { font: body, weight: 500, maxW: w * 0.8 * wk });
     } else if (role === 'back') {
       drawLogo(g, b, cx, y + h * 0.3, s * 0.32);
-      text(g, b.tagline, cx, y + h * 0.52, s * 0.055 * ts, ac, { font: disp, weight: 400, italic: true, maxW: w * 0.8 });
-      text(g, b.detail, cx, y + h * 0.64, s * 0.038 * ts, fg, { font: body, weight: 500, maxW: w * 0.8 });
+      text(g, b.tagline, cx, y + h * 0.52, s * 0.055 * ts, ac, { font: disp, weight: 400, italic: true, maxW: w * 0.8 * wk });
+      text(g, b.detail, cx, y + h * 0.64, s * 0.038 * ts, fg, { font: body, weight: 500, maxW: w * 0.8 * wk });
     } else if (role === 'side') side(b.name.toUpperCase(), Math.min(w * 0.3, h * 0.08) * ts, ac, { font: disp, spacing: 6 });
     else drawLogo(g, b, cx, cy, s * 0.62);
   }
@@ -441,9 +517,10 @@ export function paintWrap(b, aspect, W = 2048) {
   const g = c.getContext('2d');
   if (b.artwork) { g.drawImage(b.artwork, 0, 0, W, H); return c; }
   const panelW = W / 2;
-  paintPanel(g, panelW / 2, 0, panelW, H, 'front', b);
+  const bw = { ...b, _wrapK: 0.66 };
+  paintPanel(g, panelW / 2, 0, panelW, H, 'front', bw);
   const tmp = document.createElement('canvas'); tmp.width = panelW; tmp.height = H;
-  paintPanel(tmp.getContext('2d'), 0, 0, panelW, H, 'back', b);
+  paintPanel(tmp.getContext('2d'), 0, 0, panelW, H, 'back', bw);
   g.drawImage(tmp, panelW / 2, 0, panelW / 2, H, 0, 0, panelW / 2, H);
   g.drawImage(tmp, 0, 0, panelW / 2, H, W - panelW / 2, 0, panelW / 2, H);
   grain(g, W, H);
@@ -477,8 +554,8 @@ export function boxLayout(Wd, Hd, Dd, scale = 400) {
     top: r(Dd, 0, Wd, Dd), bottom: r(Dd, Dd + Hd, Wd, Dd),
   };
 }
-export function paintBox(b, dims) {
-  const L = boxLayout(dims.w, dims.h, dims.d);
+export function paintBox(b, dims, scale = 400) {
+  const L = boxLayout(dims.w, dims.h, dims.d, scale);
   const c = document.createElement('canvas'); c.width = L.width; c.height = L.height;
   const g = c.getContext('2d');
   if (b.artwork) { g.drawImage(b.artwork, 0, 0, c.width, c.height); return { canvas: c, layout: L }; }

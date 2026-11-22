@@ -5,7 +5,8 @@
 export const config = { maxDuration: 60 };
 
 const API = 'https://generativelanguage.googleapis.com/v1beta';
-const PRODUCTS = ['can', 'box', 'tub', 'jar', 'pouch'];
+const PRODUCTS = ['can', 'box', 'tub', 'jar', 'pouch', 'bottle', 'tube', 'papertube', 'cup', 'card', 'bag'];
+const CENTRES = ['none', 'spotlight', 'frame', 'arch', 'seal', 'sunburst', 'band', 'sash', 'block', 'split', 'bigtype', 'halftone'];
 const STYLES = ['classic', 'bold', 'minimal', 'heritage'];
 const FONTS = ['Instrument Serif', 'DM Serif Display', 'Bebas Neue', 'Space Grotesk', 'Inter', 'Caveat', 'Tiro Devanagari Hindi', 'Mukta', 'Fraunces', 'Cormorant Garamond', 'Marcellus', 'Abril Fatface', 'Rozha One', 'Young Serif', 'Shrikhand', 'Baloo 2', 'Unbounded', 'Bricolage Grotesque', 'Syne'];
 const PATTERNS = ['none', 'rangoli', 'warli', 'madhubani', 'kalamkari', 'blockprint', 'botanical', 'dots', 'stripes', 'chevron'];
@@ -24,6 +25,7 @@ const PLAN = {
     fonts: { type: 'OBJECT', properties: { display: S({ enum: FONTS }), body: S({ enum: FONTS }) }, required: ['display', 'body'] },
     pattern: { type: 'OBJECT', properties: { type: S({ enum: PATTERNS }), opacity: { type: 'NUMBER' } }, required: ['type', 'opacity'] },
     border: { type: 'OBJECT', properties: { type: S({ enum: BORDERS }) }, required: ['type'] },
+    centre: S({ enum: CENTRES }),
     finish: S({ enum: ['gloss', 'matte', 'metallic'] }), light: S({ enum: ['studio', 'sunlit', 'dramatic'] }),
     reasoning: { type: 'OBJECT', properties: { colour: S(), type: S(), layout: S() }, required: ['colour', 'type', 'layout'] },
   },
@@ -39,6 +41,8 @@ Rules:
 - Patterns: rangoli/kolam (festive, South Indian), warli (tribal, earthy, Maharashtra), madhubani (Bihar folk art, fish motifs), kalamkari (paisley, premium ethnic), blockprint (Rajasthani booti, homely), botanical (natural/herbal), dots/stripes/chevron (modern/playful). opacity 0–0.6; heritage looks best 0.4–0.6, other styles 0.08–0.25.
 - Fonts: use 'Tiro Devanagari Hindi' or 'Mukta' whenever name or tagline contains Hindi/Devanagari. Bebas Neue = loud/young, DM Serif Display/Abril Fatface/Rozha One = premium & bold, Cormorant Garamond/Marcellus/Instrument Serif = elegant luxury, Fraunces/Young Serif = warm & friendly, Caveat = handmade, Shrikhand/Baloo 2 = playful, Space Grotesk/Inter/Unbounded/Syne/Bricolage Grotesque = modern.
 - Borders: double (classic), arch (Mughal arch window — candles, skincare, D2C), ticket (snacks, coffee), stamp (gifting, heritage), crop (printer's crop marks — minimal, editorial), nameband (brand name ribbon — bold, streetwear), checker (retro cafe, fun), wavy (kids, drinks), stitched (handmade, crafts), torn (rustic, artisanal), jali (Indian lattice — traditional), deco (art deco corners — luxury, gold), botanical (leaf corners — tea, natural, skincare), bauhaus (geometric blocks — bold, colourful), cutcorner (apothecary — spices, wellness), sticker (friendly label), none.
+- Packs: can, box, tub, jar, pouch, bottle (sauces, oils, drinks, skincare), tube (creams, gels), papertube (gift tubes: tea, candles), cup (coffee/smoothies to go), card (hang card for keychains, jewellery, accessories), bag (paper shopping/gift bag). Never put non-food items in food containers.
+- Centre (shape behind the logo): spotlight, frame (label panel), arch, seal, sunburst, band, sash (diagonal), block (colour block), split, bigtype (giant faint name), halftone, none.
 - The logo is designed separately — don't describe one.
 - Product: choose the packaging type that suits what they sell (jar for pickles/jams/ghee/creams, can for drinks, tub for desserts/ice cream/curd, pouch for tea/coffee/spices/snacks, box for sweets/cookies/soap/cosmetics/gifts) unless the user asks for one.
 - Name: use the user's brand name exactly if given (keep Hindi as Hindi). Otherwise invent a short, memorable, culturally fitting name. Tagline under 6 words. detail = variant + quantity, e.g. "Raw mango · 250 g".
@@ -76,13 +80,13 @@ export default async function handler(req, res) {
   if (req.method === 'GET') return res.status(200).json({ ok: !!key });
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   if (!key) return res.status(500).json({ error: 'Server is missing GEMINI_API_KEY' });
-  const { mode = 'concepts', brief = '', images = [], plan, instruction = '', question = '', hasLogo = false } = req.body || {};
+  const { mode = 'concepts', brief = '', images = [], plan, instruction = '', question = '', hasLogo = false, packs = [] } = req.body || {};
 
   let parts, schema;
   if (mode === 'concepts') {
     parts = [
       ...images.slice(0, 3).map((d) => ({ inline_data: { mime_type: 'image/jpeg', data: String(d).split(',').pop() } })),
-      { text: `${GUIDE}\n\n${images.length ? `The user attached ${images.length} reference image(s) — take only their mood.\n` : ''}${hasLogo ? 'The user already has their own logo.\n' : 'The user has no logo; design one with the logo fields.\n'}User brief: """${String(brief).slice(0, 1500)}"""\n\nReturn exactly 3 clearly different concepts (for example Premium, Minimal, and Traditional or Playful — pick what fits the brief), each a complete plan.` },
+      { text: `${GUIDE}\n\n${images.length ? `The user attached ${images.length} reference image(s) — take only their mood.\n` : ''}${hasLogo ? 'The user already has their logo.\n' : ''}${packs.length ? `Packaging that suits this product (use only these unless the user named one): ${packs.map(String).join(', ')}.\n` : ''}User brief: """${String(brief).slice(0, 1500)}"""\n\nReturn exactly 3 clearly different concepts (for example Premium, Minimal, and Traditional or Playful — pick what fits the brief), each a complete plan.` },
     ];
     schema = { type: 'OBJECT', properties: { concepts: { type: 'ARRAY', items: PLAN } }, required: ['concepts'] };
   } else if (mode === 'logos') {

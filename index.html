@@ -8,20 +8,86 @@
   <title>Wrapt — describe your product, get your packaging in 3D</title>
   <meta name="description" content="Describe your product in a sentence. Wrapt designs your brand and packaging and shows it in 3D — free, in your browser." />
 </head>
-<body data-tab="create">
+<body data-tab="create" data-ltab="create">
+  <div id="landing" class="landing">
+    <canvas id="lp-canvas"></canvas>
+    <div class="lp-top">
+      <span class="lp-brand"><span class="mark"></span>Wrapt</span>
+      <nav class="lp-nav"><button data-goto="1">Logo</button><button data-goto="2">Packaging</button><button data-goto="3">Design</button><button data-goto="4">Print</button></nav>
+      <button class="lp-cta small" data-start>Start →</button>
+      <i class="lp-bar"><b id="lp-bar"></b></i>
+    </div>
+
+    <section class="lp-sec lp-hero" data-sec="0">
+      <div class="lp-copy">
+        <h1><span>Your brand,</span><span><em>wrapped.</em></span></h1>
+        <p>Sketch a logo. Get packaging. See it in 3D — in minutes, no design skills needed.</p>
+        <button class="lp-cta" data-start>Start designing →</button>
+      </div>
+      <div class="lp-scroll"><i></i>Scroll</div>
+    </section>
+
+    <section class="lp-sec left" data-sec="1">
+      <div class="lp-copy">
+        <small>01 — Logo</small>
+        <h2>Scribble it. We clean it up.</h2>
+        <p>Draw your idea, or build it from circles and shapes. Wrapt turns it into a crisp logo you can actually use.</p>
+        <div class="lp-logo">
+          <svg class="lp-sketch" viewBox="0 0 120 120" fill="none" stroke="#1c1a17" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <path pathLength="1" d="M60 22c-22-3-41 15-40 37 1 23 21 40 43 37 21-3 35-21 33-41-2-19-18-33-37-33" />
+            <path pathLength="1" d="M42 76c2-21 14-35 36-38-1 21-14 35-36 38zM43 75c9-9 17-18 25-26" />
+          </svg>
+          <img class="lp-clean" alt="Cleaned-up logo" />
+        </div>
+      </div>
+    </section>
+
+    <section class="lp-sec right" data-sec="2">
+      <div class="lp-copy">
+        <small>02 — Packaging</small>
+        <h2>Wrapped in real 3D.</h2>
+        <p>Cans, boxes, bottles, pouches, tubes, cups, bags and hang cards — matched to what you sell. Drag, zoom, spin.</p>
+        <div class="lp-pills"><span>Can</span><span>Box</span><span>Bottle</span><span>Pouch</span><span>Tube</span><span>Cup</span><span>Bag</span><span>Hang card</span><span>Jar</span><span>Tub</span><span>Paper tube</span></div>
+      </div>
+    </section>
+
+    <section class="lp-sec left" data-sec="3">
+      <div class="lp-copy">
+        <small>03 — Design</small>
+        <h2>Make it yours.</h2>
+        <p>Borders, centre designs, Indian patterns, colours and 19 fonts. Click to change anything — or just ask: “make it more premium”.</p>
+      </div>
+    </section>
+
+    <section class="lp-sec right" data-sec="4">
+      <div class="lp-copy">
+        <small>04 — Print</small>
+        <h2>From 3D to print.</h2>
+        <p>Keep scrolling and the box unfolds into its dieline. Export a print-ready PDF with bleed and cut lines, a 360° video, or images for Instagram.</p>
+      </div>
+    </section>
+
+    <section class="lp-sec lp-end" data-sec="5">
+      <div class="lp-copy">
+        <h2>Let's make yours.</h2>
+        <button class="lp-cta big" data-start>Start designing →</button>
+        <button class="lp-link" id="lp-how">How it's built</button>
+      </div>
+    </section>
+  </div>
   <header class="top">
-    <div class="brand"><span class="mark"></span><b>Wrapt</b><small>AI packaging studio</small></div>
+    <button class="brand" id="home-btn" title="Back to the start page"><span class="mark"></span><b>Wrapt</b></button>
     <div class="top-actions">
       <button id="undo" class="icon" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶</button>
       <button id="redo" class="icon" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>↷</button>
       <button id="new-btn" class="ghost">✦ New design</button>
-      <button id="how-btn" class="ghost">How it works</button>
       <button id="export-btn" class="primary">Export ↓</button>
     </div>
   </header>
 
   <main class="app">
     <aside class="panel left">
+      <div class="ltabs" id="ltabs"><button data-ltab="create" class="on">Create</button><button data-ltab="product">Product</button><button data-ltab="design">Design</button></div>
       <!-- CREATE -->
       <section data-panel="create">
         <h3>Your product <small id="ai-status"></small></h3>
@@ -53,6 +119,12 @@
           <button data-product="tub"><svg viewBox="0 0 40 40"><path d="M8 13h24l-3 18H11z" /><path d="M7 10h26v3H7z" /></svg>Tub</button>
           <button data-product="jar"><svg viewBox="0 0 40 40"><path d="M14 6h12v5H14z" /><path d="M13 11h14l3 4v16l-3 3H13l-3-3V15z" /><path d="M10 18h20v9H10" /></svg>Jar</button>
           <button data-product="pouch"><svg viewBox="0 0 40 40"><path d="M11 7h18v3l1 20-3 3H13l-3-3 1-20z" /><path d="M11 11h18" /></svg>Pouch</button>
+          <button data-product="bottle"><svg viewBox="0 0 40 40"><path d="M17 5h6v5l4 6v16a2 2 0 0 1-2 2H15a2 2 0 0 1-2-2V16l4-6z" /><path d="M13 20h14v8H13" /></svg>Bottle</button>
+          <button data-product="tube"><svg viewBox="0 0 40 40"><path d="M12 6h16v3l-3 21H15L12 9z" /><path d="M16 30h8v4h-8z" /></svg>Tube</button>
+          <button data-product="papertube"><svg viewBox="0 0 40 40"><path d="M13 12h14v22H13z" /><path d="M12 6h16v8H12z" /></svg>Paper tube</button>
+          <button data-product="cup"><svg viewBox="0 0 40 40"><path d="M11 12h18l-2.5 22h-13z" /><path d="M10 8h20v4H10z" /></svg>Cup</button>
+          <button data-product="card"><svg viewBox="0 0 40 40"><path d="M11 5h18v30H11z" /><path d="M17 9h6" /><path d="M15 16h10v10H15z" /></svg>Hang card</button>
+          <button data-product="bag"><svg viewBox="0 0 40 40"><path d="M9 14h22l-1 20H10z" /><path d="M15 14v-3a5 5 0 0 1 10 0v3" /></svg>Bag</button>
         </div>
         <div id="dims"></div>
         <div id="fold-row" class="fold" hidden>
@@ -89,6 +161,9 @@
 
         <h3>Layout</h3>
         <div class="chips"><button data-style="classic">Classic</button><button data-style="bold">Bold</button><button data-style="minimal">Minimal</button><button data-style="heritage">Heritage</button></div>
+
+        <h3>Centre</h3>
+        <div class="btiles" id="centres"></div>
 
         <h3>Colours</h3>
         <div class="colors">
@@ -138,6 +213,8 @@
       <section data-panel="look">
         <h3>Finish</h3>
         <div class="chips"><button data-finish="gloss">Gloss</button><button data-finish="matte">Matte</button><button data-finish="metallic">Metallic</button></div>
+        <h3>Scene</h3>
+        <div class="chips" id="scenes"><button data-scene="studio">Studio</button><button data-scene="podium">Podium</button><button data-scene="shelf">Shelf</button></div>
         <h3>Lighting</h3>
         <div class="lights">
           <button data-light="studio"><i style="--a:#fff;--b:#ddd"></i>Studio</button>
@@ -173,6 +250,7 @@
         <button type="button" id="dl-png" class="primary">Image (PNG)</button>
         <button type="button" id="dl-alpha" class="ghost">Transparent PNG</button>
         <button type="button" id="dl-video" class="ghost">360° video</button>
+        <button type="button" id="dl-pdf" class="ghost">Print file (PDF)</button>
         <button type="button" id="dl-logo" class="ghost">Logo (PNG)</button>
         <button type="button" id="dl-logo-svg" class="ghost">Logo (SVG)</button>
       </div>
@@ -203,7 +281,7 @@
     <form id="wizard" class="wizard">
       <div class="wz-top">
         <button type="button" class="wz-back" id="wz-back" aria-label="Back">←</button>
-        <div class="wz-dots"><i class="on"></i><i></i><i></i></div>
+        <ol class="jsteps"><li data-j="1"><b>1</b><span>Logo?</span></li><li data-j="2"><b>2</b><span>Product</span></li><li data-j="3"><b>3</b><span>Style</span></li><li data-j="4"><b>4</b><span>Design logo</span></li><li data-j="5"><b>5</b><span>Packaging</span></li></ol>
         <button type="button" class="close" id="wz-close" aria-label="Close">✕</button>
       </div>
 
@@ -228,7 +306,7 @@
         <h2>Make it yours <em>all optional</em></h2>
         <div class="wz-field"><span>Packaging</span>
           <div class="chips" id="wz-product">
-            <button type="button" data-wp="" class="on">✦ Let AI choose</button><button type="button" data-wp="can">Can</button><button type="button" data-wp="box">Box</button><button type="button" data-wp="tub">Tub</button><button type="button" data-wp="jar">Jar</button><button type="button" data-wp="pouch">Pouch</button>
+            <button type="button" data-wp="" class="on">✦ Let AI choose</button><button type="button" data-wp="can">Can</button><button type="button" data-wp="box">Box</button><button type="button" data-wp="tub">Tub</button><button type="button" data-wp="jar">Jar</button><button type="button" data-wp="pouch">Pouch</button><button type="button" data-wp="bottle">Bottle</button><button type="button" data-wp="tube">Tube</button><button type="button" data-wp="cup">Cup</button><button type="button" data-wp="papertube">Paper tube</button><button type="button" data-wp="card">Hang card</button><button type="button" data-wp="bag">Bag</button>
           </div>
         </div>
         <div class="wz-field"><span>Feel <em>up to 3</em></span><div class="chips" id="wz-vibe"></div></div>
@@ -245,6 +323,7 @@
 
   <dialog id="lstudio">
     <div class="ls-wrap">
+      <div class="ls-journey"><ol class="jsteps"><li data-j="1"><b>1</b><span>Logo?</span></li><li data-j="2"><b>2</b><span>Product</span></li><li data-j="3"><b>3</b><span>Style</span></li><li data-j="4"><b>4</b><span>Design logo</span></li><li data-j="5"><b>5</b><span>Packaging</span></li></ol></div>
       <div class="ls-head">
         <b>Your logo</b>
         <div class="ls-tabs" id="ls-tabs"><button type="button" data-lstab="describe" class="on">Describe</button><button type="button" data-lstab="draw">Draw</button></div>
@@ -269,17 +348,20 @@
             <div class="ls-padbox">
               <canvas id="ls-pad"></canvas>
               <div class="ls-tools">
-                <button type="button" data-pen="0.012" title="Thin"><i style="--s:3px"></i></button>
-                <button type="button" data-pen="0.022" class="on" title="Medium"><i style="--s:6px"></i></button>
-                <button type="button" data-pen="0.04" title="Thick"><i style="--s:10px"></i></button>
-                <button type="button" data-tool="eraser" title="Eraser">⌫</button>
-                <button type="button" data-sact="mirror" title="Mirror both sides">◧</button>
-                <button type="button" data-sact="undo" title="Undo">↶</button>
-                <button type="button" data-sact="clear" title="Clear">✕</button>
+                <div class="tgrp"><button type="button" data-pen="0.012" title="Thin pen"><i style="--s:3px"></i></button><button type="button" data-pen="0.022" class="on" title="Pen"><i style="--s:6px"></i></button><button type="button" data-pen="0.04" title="Thick pen"><i style="--s:10px"></i></button></div>
+                <div class="tgrp shapes">
+                  <button type="button" data-tool="circle" title="Circle — drag from the centre"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg></button>
+                  <button type="button" data-tool="square" title="Square"><svg viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="15" height="15" rx="1"/></svg></button>
+                  <button type="button" data-tool="triangle" title="Triangle"><svg viewBox="0 0 24 24"><path d="M12 4l8.5 15h-17z"/></svg></button>
+                  <button type="button" data-tool="line" title="Straight line"><svg viewBox="0 0 24 24"><path d="M5 19L19 5"/></svg></button>
+                  <button type="button" data-tool="heart" title="Heart"><svg viewBox="0 0 24 24"><path d="M12 20s-8-5-8-11a4.5 4.5 0 0 1 8-2.6A4.5 4.5 0 0 1 20 9c0 6-8 11-8 11z"/></svg></button>
+                  <button type="button" data-tool="star" title="Star"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg></button>
+                </div>
+                <div class="tgrp"><button type="button" data-tool="eraser" title="Eraser — touch a line">⌫</button><button type="button" data-sact="mirror" title="Mirror both sides">◧</button><button type="button" data-sact="undo" title="Undo">↶</button><button type="button" data-sact="clear" title="Clear">✕</button></div>
               </div>
             </div>
             <div class="ls-drawside">
-              <p class="ls-hint">Draw a simple symbol. Wobbly is fine — we tidy it up.</p>
+              <p class="ls-hint">Draw a simple symbol, or build one from shapes. Wobbly lines and scribbles get tidied up.</p>
               <div id="ls-refined" class="ls-refined"></div>
             </div>
           </div>

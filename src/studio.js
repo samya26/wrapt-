@@ -67,7 +67,8 @@ export class Studio {
     this.setLight('studio');
     new ResizeObserver(() => this.resize()).observe(canvas.parentElement);
     this.resize();
-    const loop = () => { requestAnimationFrame(loop); this.tick(); };
+    this.paused = true; // the start page runs first; the studio wakes up when the journey starts
+    const loop = () => { requestAnimationFrame(loop); if (!this.paused) this.tick(); };
     loop();
   }
 
@@ -92,17 +93,44 @@ export class Studio {
   }
 
   setProduct(built, { keepCamera = false } = {}) {
-    this.holder.clear();
-    this.product = built; this.holder.add(built.group);
-    const s = built.radius * 3.2; this.cshadow.scale.set(s, s, 1);
-    this.target = new THREE.Vector3(0, built.height * 0.48, 0);
-    this.controls.target.copy(this.target);
+    this.product = built;
+    this.applyScene();
     if (!keepCamera) this.view('hero');
+  }
+  // Scenes: plain studio sweep, a podium shot, or a retail shelf with a row of packs
+  setScene(name) { this.sceneName = name; if (this.product) { this.applyScene(); this.view('hero'); } }
+  applyScene() {
+    const built = this.product, name = this.sceneName || 'studio';
+    this.holder.clear(); this.holder.position.set(0, 0, 0);
+    if (this.props) { this.scene.remove(this.props); this.props = null; }
+    const props = (this.props = new THREE.Group()); this.scene.add(props);
+    const R = built.radius, H = built.height;
+    let lift = 0, rowW = R * 2;
+    if (name === 'podium') {
+      lift = 0.16;
+      const pm = new THREE.MeshStandardMaterial({ color: new THREE.Color(this.bg || '#efe3d2').offsetHSL(0, -0.05, -0.06), roughness: 0.85 });
+      const plinth = new THREE.Mesh(new THREE.CylinderGeometry(R * 2.1, R * 2.1, lift, 96), pm); plinth.position.y = lift / 2; plinth.castShadow = plinth.receiveShadow = true; props.add(plinth);
+      const archShape = new THREE.Shape(); const aw = Math.max(R * 3.2, H * 0.9), ah = H * 1.9;
+      archShape.moveTo(-aw / 2, 0); archShape.lineTo(-aw / 2, ah - aw / 2); archShape.absarc(0, ah - aw / 2, aw / 2, Math.PI, 0, true); archShape.lineTo(aw / 2, 0); archShape.lineTo(-aw / 2, 0);
+      const arch = new THREE.Mesh(new THREE.ShapeGeometry(archShape, 48), new THREE.MeshStandardMaterial({ color: new THREE.Color(this.bg || '#efe3d2').offsetHSL(0, 0.02, -0.1), roughness: 1 }));
+      arch.position.set(0, 0.001, -R * 2.6); arch.receiveShadow = true; props.add(arch);
+      this.holder.add(built.group);
+    } else if (name === 'shelf') {
+      const gap = R * 2.5, n = 3; rowW = gap * (n - 1) + R * 2; lift = 0.06;
+      const wood = new THREE.MeshStandardMaterial({ color: '#b98a5e', roughness: 0.7 });
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(rowW + R * 2, lift, R * 3.2), wood); plank.position.y = lift / 2; plank.castShadow = plank.receiveShadow = true; props.add(plank);
+      for (let i = 0; i < n; i++) { const c = i === 1 ? built.group : built.group.clone(); c.position.x = (i - 1) * gap; c.position.z = i === 1 ? R * 0.15 : 0; this.holder.add(c); }
+    } else this.holder.add(built.group);
+    this.holder.position.y = lift;
+    const s = (name === 'shelf' ? rowW : R) * (name === 'shelf' ? 1.3 : 3.2); this.cshadow.scale.set(s, name === 'shelf' ? R * 3 : s, 1); this.cshadow.position.y = lift + 0.002;
+    this.fitW = name === 'shelf' ? rowW : R * 2;
+    this.target = new THREE.Vector3(0, lift + H * 0.48, 0);
+    this.controls.target.copy(this.target);
   }
 
   view(name) {
     const p = this.product; if (!p) return;
-    const fit = Math.max(p.height, p.radius * 2.4);
+    const fit = Math.max(p.height * (this.sceneName === 'podium' ? 1.25 : 1), (this.fitW || p.radius * 2) * 1.2);
     const dist = (fit / 2) / Math.tan((this.camera.fov * Math.PI) / 360) * 1.55;
     const dirs = { hero: [0.55, 0.32, 0.77], front: [0, 0.08, 1], top: [0.15, 0.95, 0.27], low: [0.6, 0.02, 0.8], wide: [0.35, 0.3, 0.9] };
     const d = new THREE.Vector3(...dirs[name]).normalize().multiplyScalar(dist * (name === 'wide' ? 2.1 : 1));

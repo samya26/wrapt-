@@ -21,18 +21,22 @@ export class SketchPad {
     e.preventDefault(); this.c.setPointerCapture?.(e.pointerId);
     const p = this.pt(e);
     if (this.tool === 'eraser') { this.erasing = true; this.eraseAt(p); return; }
+    if (SHAPES[this.tool]) { this.shapeStart = p; this.cur = { pts: SHAPES[this.tool](p, p), w: this.pen }; this.draw(); return; }
     this.cur = { pts: [p], w: this.pen }; this.draw();
   }
   move(e) {
     if (this.erasing) { this.eraseAt(this.pt(e)); return; }
     if (!this.cur) return; e.preventDefault();
-    const p = this.pt(e), l = this.cur.pts[this.cur.pts.length - 1];
+    const p = this.pt(e);
+    if (this.shapeStart) { this.cur.pts = SHAPES[this.tool](this.shapeStart, p); this.draw(); return; }
+    const l = this.cur.pts[this.cur.pts.length - 1];
     if (Math.hypot(p.x - l.x, p.y - l.y) > 0.003) { this.cur.pts.push(p); this.draw(); }
   }
   up() {
     this.erasing = false;
     if (!this.cur) return;
-    const s = this.cur; this.cur = null;
+    const s = this.cur; this.cur = null; const wasShape = !!this.shapeStart; this.shapeStart = null;
+    if (wasShape && Math.hypot(s.pts[0].x - s.pts[Math.floor(s.pts.length / 2)].x, s.pts[0].y - s.pts[Math.floor(s.pts.length / 2)].y) < 0.02) { this.draw(); return; } // a tap, not a drag
     const act = [s]; if (this.mirror) act.push({ pts: s.pts.map((p) => ({ x: 1 - p.x, y: p.y })), w: s.w });
     this.actions.push(act); this.draw(); this.onChange();
   }
@@ -63,6 +67,22 @@ export class SketchPad {
   }
   png() { const c = document.createElement('canvas'); c.width = c.height = 384; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 384, 384); g.drawImage(this.c, 0, 0, 384, 384); return c.toDataURL('image/jpeg', 0.85); }
 }
+
+// Shape stamps: drag out from the centre (line: from start to end). Stored as normal strokes,
+// so the clean-up snaps them into perfect shapes.
+const ring = (c, rx, ry, n = 72, f = (a) => [Math.cos(a), Math.sin(a)]) => Array.from({ length: n + 1 }, (_, i) => { const [u, v] = f((i / n) * Math.PI * 2 - Math.PI / 2); return { x: c.x + u * rx, y: c.y + v * ry }; });
+export const SHAPES = {
+  circle: (a, b) => { const r = Math.max(0.005, Math.hypot(b.x - a.x, b.y - a.y)); return ring(a, r, r); },
+  square: (a, b) => { const r = Math.max(0.005, Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y))), pts = []; const cs = [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]];
+    for (let i = 0; i < 4; i++) for (let k = 0; k < 12; k++) { const t = k / 12; pts.push({ x: a.x + r * (cs[i][0] + (cs[i + 1][0] - cs[i][0]) * t), y: a.y + r * (cs[i][1] + (cs[i + 1][1] - cs[i][1]) * t) }); }
+    pts.push({ ...pts[0] }); return pts; },
+  triangle: (a, b) => { const r = Math.max(0.005, Math.hypot(b.x - a.x, b.y - a.y)), v = [0, 1, 2, 0].map((i) => ({ x: a.x + r * Math.cos(-Math.PI / 2 + (i * 2 * Math.PI) / 3), y: a.y + r * Math.sin(-Math.PI / 2 + (i * 2 * Math.PI) / 3) })), pts = [];
+    for (let i = 0; i < 3; i++) for (let k = 0; k < 16; k++) { const t = k / 16; pts.push({ x: v[i].x + (v[i + 1].x - v[i].x) * t, y: v[i].y + (v[i + 1].y - v[i].y) * t }); }
+    pts.push({ ...v[0] }); return pts; },
+  line: (a, b) => Array.from({ length: 12 }, (_, i) => ({ x: a.x + ((b.x - a.x) * i) / 11, y: a.y + ((b.y - a.y) * i) / 11 })),
+  heart: (a, b) => { const r = Math.max(0.005, Math.hypot(b.x - a.x, b.y - a.y)) / 17; return Array.from({ length: 97 }, (_, i) => { const t = (i / 96) * Math.PI * 2; return { x: a.x + r * 16 * Math.pow(Math.sin(t), 3), y: a.y - r * (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) }; }); },
+  star: (a, b) => { const r = Math.max(0.005, Math.hypot(b.x - a.x, b.y - a.y)); return Array.from({ length: 11 }, (_, i) => { const ang = -Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 ? r * 0.45 : r; return { x: a.x + Math.cos(ang) * rr, y: a.y + Math.sin(ang) * rr }; }); },
+};
 
 // ---------- geometry ----------
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -115,10 +135,40 @@ function classify(s, geo) {
 }
 
 // mode: 'clean' (smoothed, true to the drawing) · 'geo' (snapped, even, symmetric) · 'bold' (thick, solid)
-export function refineSketch(strokes, mode = 'clean') {
-  if (!strokes.length) return null;
+// shaky hands: average each point with its neighbours before simplifying
+function steady(pts, k = 3) {
+  if (pts.length < 5) return pts;
+  return pts.map((p, i) => { let sx = 0, sy = 0, n = 0; for (let j = Math.max(0, i - k); j <= Math.min(pts.length - 1, i + k); j++) { sx += pts[j].x; sy += pts[j].y; n++; } return i === 0 || i === pts.length - 1 ? p : { x: sx / n, y: sy / n }; });
+}
+function hull(pts) { // convex hull (monotone chain)
+  const P = [...pts].sort((a, b) => a.x - b.x || a.y - b.y), cr = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lo = [], up = [];
+  for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (const p of P.reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+const overlap = (a, b) => { const x = Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)), y = Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0)); return (x * y) / Math.max(1e-6, Math.min(a.w * a.h, b.w * b.h)); };
+// Scribbles (back-and-forth, knots, colouring-in) become one solid, smooth shape instead of a tangle.
+function tidy(strokes) {
+  const out = [], used = new Set();
+  const info = strokes.map((s) => ({ s, b: bbox(s.pts), len: pathLen(s.pts) }));
+  info.forEach((A, i) => {
+    if (used.has(i)) return;
+    const group = [A]; used.add(i);
+    info.forEach((B, j) => { if (!used.has(j) && j !== i && overlap(A.b, B.b) > 0.55 && Math.min(A.b.d, B.b.d) / Math.max(A.b.d, B.b.d) > 0.35) { group.push(B); used.add(j); } });
+    const pts = group.flatMap((g) => g.s.pts), b = bbox(pts), len = group.reduce((a, g) => a + g.len, 0);
+    const scribble = b.d > 0.03 && len / b.d > 3.4 && !(group.length === 1 && classify(group[0].s, false).kind === 'ellipse');
+    if (scribble) out.push({ pts: hull(pts), w: Math.max(...group.map((g) => g.s.w)), blob: true });
+    else group.forEach((g) => out.push(g.s));
+  });
+  return out;
+}
+
+export function refineSketch(rawStrokes, mode = 'clean') {
+  if (!rawStrokes.length) return null;
+  const strokes = tidy(rawStrokes.map((s) => ({ ...s, pts: steady(s.pts, mode === 'geo' ? 2 : 3) })));
   const geo = mode === 'geo';
-  const shapes = strokes.map((s) => ({ ...classify(s, geo), w: s.w }));
+  const shapes = strokes.map((s) => (s.blob ? { kind: 'blob', pts: s.pts, w: s.w } : { ...classify(s, geo), w: s.w }));
   // fit everything into a 100×100 box (84 used)
   const all = strokes.flatMap((s) => s.pts); const b = bbox(all);
   const sc = 84 / Math.max(b.w, b.h, 0.05), ox = 50 - ((b.x0 + b.x1) / 2) * sc, oy = 50 - ((b.y0 + b.y1) / 2) * sc;
@@ -129,6 +179,7 @@ export function refineSketch(strokes, mode = 'clean') {
   const sw = Math.min(10, Math.max(4.2, median * sc) * (mode === 'bold' ? 1.9 : 1));
   const paths = shapes.map((sh) => {
     const lw = geo || mode === 'bold' ? sw : Math.max(4.2, sh.w * sc);
+    if (sh.kind === 'blob') { const p = sh.pts.map(T); const bb = bbox(p); return { d: geo ? poly(p.map(G), true) : smoothClosed(p.map((q) => [q.x, q.y])), fill: true, lw, closed: true, area: bb.w * bb.h * 0.7 }; }
     if (sh.kind === 'dot') { const c = T(sh.c); return { d: ellipseD(c.x, c.y, lw * 0.55, lw * 0.55), fill: true, stroke: false, lw }; }
     if (sh.kind === 'line') {
       let a = T(sh.a), e = T(sh.b);

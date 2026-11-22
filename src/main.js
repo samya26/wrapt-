@@ -35,11 +35,13 @@ import '@fontsource/syne/latin-500.css';
 import '@fontsource/syne/latin-700.css';
 import './style.css';
 import { Studio } from './studio.js';
-import { BUILDERS, DEFAULTS } from './products.js';
-import { loadImage, extractPalette, templateFor, mix, isDark, loadFonts, paper, ink, luminance, FONTS, PATTERNS, BORDERS, CORNER_OK, borderType, borderTile } from './art.js';
+import { BUILDERS, DEFAULTS, PRODUCT_NAMES, printArea } from './products.js';
+import { printPDF } from './print.js';
+import { paintBox, paintWrap, paintFace, loadImage, extractPalette, templateFor, mix, isDark, loadFonts, paper, ink, luminance, FONTS, PATTERNS, BORDERS, CORNER_OK, CENTRES, borderType, borderTile, centreTile, removeBackground, plainCorners, logoCoverage } from './art.js';
 import { renderLogo, logoSVG, packColors, designLogos } from './logo.js';
 import { openLogoStudio, initLogoStudio } from './logostudio.js';
-import { designLocally, refineLocally, normalizePlan, audit, askAI } from './design.js';
+import { initLanding } from './landing.js';
+import { designLocally, refineLocally, normalizePlan, audit, askAI, allowedPacks } from './design.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -132,7 +134,11 @@ function renderAudit() {
     : '<div class="issue ok"><p>✓ Readable text, logo stands out, nothing too close to the edges.</p></div>';
   $('#audit').onclick = (e) => {
     const k = e.target.closest('[data-fix]')?.dataset.fix; if (k == null) return;
-    Object.assign(state.brand, issues[k].patch); syncInputs(); rebuild(true);
+    const pt = issues[k].patch;
+    if (pt._removeBg) { const img = removeBackground(state.brand.uploadedLogo || state.brand.logo); state.brand.uploadedLogo = img; state.brand.logo = img; toast('Background removed'); }
+    else if (pt._studio) { $('#ai-logo').click(); return; }
+    else Object.assign(state.brand, pt);
+    syncInputs(); rebuild(true);
   };
 }
 
@@ -140,12 +146,12 @@ function renderAudit() {
 function planFromState() {
   const b = state.brand;
   return normalizePlan({ concept: state.plan?.concept || 'Current', name: b.name, tagline: b.tagline, detail: b.detail, product: state.product, style: b.style,
-    palette: { pack: b.pack, accent: b.accent, background: state.bg }, fonts: b.fonts, pattern: { type: b.pattern.type, opacity: b.pattern.opacity }, border: { type: b.border.type },
+    palette: { pack: b.pack, accent: b.accent, background: state.bg }, fonts: b.fonts, pattern: { type: b.pattern.type, opacity: b.pattern.opacity }, border: { type: b.border.type }, centre: b.centre || 'none',
     logo: b.logoSpec, finish: state.finish, light: state.light, reasoning: state.plan?.reasoning || {} });
 }
 function brandFromPlan(p, keepUploaded) {
   const b = { ...state.brand, fonts: { ...p.fonts }, pattern: { ...p.pattern, image: null }, border: { ...state.brand.border, type: borderType(p.border.type), image: null },
-    name: p.name, tagline: p.tagline, detail: p.detail, pack: p.palette.pack, accent: p.palette.accent, ink: null, style: p.style,
+    name: p.name, tagline: p.tagline, detail: p.detail, pack: p.palette.pack, accent: p.palette.accent, ink: null, style: p.style, centre: p.centre || 'none',
     logoSpec: state.brand.logoSpec || autoSpec(p), logoScale: p.logoScale ?? 1, logoY: 0, logoPlate: false, artwork: null };
   if (keepUploaded && state.brand.uploadedLogo) { b.logo = state.brand.uploadedLogo; b.logoSource = 'upload'; b.logoHasName = false; }
   else { b.logoSource = 'spec'; b.logo = specLogo(b); b.logoHasName = true; }
@@ -206,14 +212,17 @@ async function generate(opts = {}) {
   if (locked) opts = { ...opts, name: opts.name || state.brand.logoSpec.name };
   let plans, note = '';
   if (aiMode !== 'local') {
-    const res = await askAI({ mode: 'concepts', brief: brief + (locked ? ` Their logo is already designed (colours ${state.brand.logoSpec.colors.primary} and ${state.brand.logoSpec.colors.secondary}) — build the packaging around it.` : ''), images: state.refs.map((r) => r.data), hasLogo: hasLogo || !!locked });
+    const res = await askAI({ mode: 'concepts', packs: opts.product ? [] : allowedPacks(brief), brief: brief + (locked ? ` Their logo is already designed (colours ${state.brand.logoSpec.colors.primary} and ${state.brand.logoSpec.colors.secondary}) — build the packaging around it.` : ''), images: state.refs.map((r) => r.data), hasLogo: hasLogo || !!locked });
     if (res?.concepts?.length) { plans = res.concepts.slice(0, 3).map((p) => normalizePlan(p, { hasLogo })); aiMode = 'ai'; }
     else { if (res?.unavailable) aiMode = 'local'; else note = `AI had a problem (${res?.error || 'unknown'}) — used the built-in designer.`; }
     setAiStatus();
   }
   if (!plans) plans = designLocally(brief, { refColors: colors.length ? [colors[0], colors[1] || mix(colors[0], isDark(colors[0]) ? '#f3d9a4' : '#2a1d16', 0.6)] : state.refs[0]?.colors || [], hasLogo });
   // hard choices from the start screen always win
-  plans = plans.map((p) => normalizePlan({ ...p, ...(opts.name ? { name: opts.name } : {}), ...(opts.product ? { product: opts.product } : {}) }, { hasLogo }));
+  const fits = allowedPacks(brief), named = /\b(can|box|tub|jar|pouch|bottle|tube|cup|card|bag)s?\b|paper tube|hang card/i.test(brief);
+  const same = plans.every((p) => p.product === plans[0].product);
+  plans = plans.map((p, i) => normalizePlan({ ...p, ...(opts.name ? { name: opts.name } : {}),
+    product: opts.product || (named ? p.product : fits.includes(p.product) && !(same && i > 0) ? p.product : fits[i % Math.min(3, fits.length)]) }, { hasLogo }));
   // one logo for all three concepts: the locked one, or a clean wordmark
   if (!locked && !hasLogo) state.brand.logoSpec = autoSpec(plans[0]);
   state.concepts = plans;
@@ -282,10 +291,12 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 $('#font-display').innerHTML = $('#font-body').innerHTML = Object.keys(FONTS).map((f) => `<option value="${f}">${f}</option>`).join('');
 $('#patterns').innerHTML = Object.entries(PATTERNS).map(([k, v]) => `<button data-pattern="${k}">${v}</button>`).join('');
 $('#borders').innerHTML = Object.entries(BORDERS).filter(([k]) => k !== 'image').map(([k, v]) => `<button data-border="${k}" title="${v}"><canvas width="128" height="168"></canvas><span>${v}</span></button>`).join('');
+$('#centres').innerHTML = Object.entries(CENTRES).map(([k, v]) => `<button data-centre="${k}" title="${v}"><canvas width="128" height="168"></canvas><span>${v}</span></button>`).join('');
 let tileKey = '';
 function renderBorderTiles() {
   const b = state.brand, key = [paper(b), b.accent, b.name, b.border.color, b.style, b.fonts.body].join('|'); if (key === tileKey) return; tileKey = key;
   $$('#borders [data-border]').forEach((el) => { const c = el.querySelector('canvas'), t = borderTile(b, el.dataset.border, 64, 84); c.getContext('2d').drawImage(t, 0, 0, 128, 168); });
+  $$('#centres [data-centre]').forEach((el) => { const c = el.querySelector('canvas'), t = centreTile(b, el.dataset.centre, 64, 84); c.getContext('2d').drawImage(t, 0, 0, 128, 168); });
 }
 
 function syncInputs() {
@@ -299,7 +310,7 @@ function syncInputs() {
   const on = (sel, key, val) => $$(sel).forEach((el) => el.classList.toggle('on', el.dataset[key] === val));
   on('[data-style]', 'style', b.style); on('[data-product]', 'product', state.product); on('[data-finish]', 'finish', state.finish); on('[data-light]', 'light', state.light);
   on('[data-pattern]', 'pattern', b.pattern.image ? '' : b.pattern.type); on('[data-border]', 'border', b.border.type === 'image' ? '' : borderType(b.border.type));
-  on('[data-bcol]', 'bcol', b.border.color || 'accent');
+  on('[data-bcol]', 'bcol', b.border.color || 'accent'); on('[data-centre]', 'centre', b.centre || 'none'); on('[data-scene]', 'scene', state.scene || 'studio');
   $('#border-ctl').hidden = b.border.type === 'none';
   $('#corners-row').hidden = !CORNER_OK.includes(b.border.type); $('#border-corners').checked = !!b.border.corners;
   $('#border-inset').value = b.border.inset ?? 0.045; $('#bi-v').textContent = `${Math.round((b.border.inset ?? 0.045) * 100)}`;
@@ -338,6 +349,9 @@ document.addEventListener('click', async (e) => {
   if (d.pattern) { b.pattern = { ...b.pattern, type: d.pattern, image: null, opacity: d.pattern !== 'none' && b.pattern.type === 'none' ? (b.style === 'heritage' ? 0.5 : 0.18) : b.pattern.opacity }; syncInputs(); rebuild(); }
   if (d.border) { b.border = { ...b.border, type: d.border }; syncInputs(); rebuild(); }
   if (d.bcol) { b.border = { ...b.border, color: d.bcol }; syncInputs(); rebuild(); }
+  if (d.centre) { b.centre = d.centre; syncInputs(); rebuild(); }
+  if (d.scene) { state.scene = d.scene; studio.setScene(d.scene); syncInputs(); }
+  if (d.ltab) { document.body.dataset.ltab = d.ltab; $$('[data-ltab]').forEach((x) => x.classList.toggle('on', x === t)); $('.panel.left').scrollTop = 0; }
   if (d.tab) { $$('[data-tab]').forEach((x) => x.classList.toggle('on', x === t)); document.body.dataset.tab = d.tab; }
 });
 $('#c-pack').addEventListener('input', (e) => { state.brand.pack = e.target.value; rebuild(); });
@@ -375,6 +389,7 @@ $('#play-fold').addEventListener('click', () => {
 async function fileToImage(f) { const url = URL.createObjectURL(f); try { return await loadImage(url); } finally { setTimeout(() => URL.revokeObjectURL(url), 5000); } }
 async function useUploadedLogo(img, name) {
   const b = state.brand;
+  if (logoCoverage(img) > 0.97 && plainCorners(img)) { img = removeBackground(img); toast('Removed the plain background from your logo'); }
   b.uploadedLogo = img; b.logo = img; b.logoSource = 'upload'; b.artwork = null; b.logoPlate = false; b.ink = null;
   const [main, accent, ...rest] = extractPalette(img);
   state.palette = [main, accent, ...rest].filter(Boolean).slice(0, 5);
@@ -416,9 +431,34 @@ function download(blob, name) {
 }
 const slug = () => (state.brand.name || 'wrapt').toLowerCase().replace(/[^a-z0-9ऀ-ॿ]+/g, '-');
 $('#export-btn').addEventListener('click', () => $('#export').showModal());
-$('#how-btn').addEventListener('click', () => $('#how').showModal());
+$('#home-btn').addEventListener('click', () => openLanding());
 $$('dialog .close').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
 const size = () => SIZES[$('input[name=size]:checked').value];
+// print-ready PDF at real size, with bleed, crop marks and the dieline
+function printFile() {
+  const b = state.brand, P = state.product, d = state.dims[P], A = printArea(P, d);
+  let art, cuts = [], folds = [], mmW = A.w, mmH = A.h;
+  if (A.kind === 'box') {
+    const { canvas } = paintBox(b, d, 1000); art = canvas;
+    const D = d.d * 100, W = d.w * 100, H = d.h * 100, k = 10, gx = art.getContext('2d'); // 10 px per mm
+    gx.fillStyle = '#ffffff'; // nothing prints outside the dieline
+    for (const [x, y, w, h] of [[0, 0, D, D], [D + W, 0, D + W, D], [0, D + H, D, D], [D + W, D + H, D + W, D]]) gx.fillRect(x * k, y * k, w * k, h * k);
+    const poly = [[D, 0], [D + W, 0], [D + W, D], [2 * D + 2 * W, D], [2 * D + 2 * W, D + H], [D + W, D + H], [D + W, 2 * D + H], [D, 2 * D + H], [D, D + H], [0, D + H], [0, D], [D, D], [D, 0]];
+    for (let i = 0; i < poly.length - 1; i++) cuts.push([...poly[i], ...poly[i + 1]]);
+    folds = [[D, D, D, D + H], [D + W, D, D + W, D + H], [2 * D + W, D, 2 * D + W, D + H], [D, D, D + W, D], [D, D + H, D + W, D + H]];
+  } else if (A.kind === 'faces') {
+    const gap = 10, px = 2400, f = paintFace(b, 'front', d.w / d.h, px), bk = paintFace(b, 'back', d.w / d.h, px), k = px / A.w;
+    art = document.createElement('canvas'); art.width = Math.round((A.w * 2 + gap) * k); art.height = f.height;
+    const g = art.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, art.width, art.height); g.drawImage(f, 0, 0); g.drawImage(bk, (A.w + gap) * k, 0);
+    mmW = A.w * 2 + gap;
+    for (const ox of [0, A.w + gap]) cuts.push([ox, 0, ox + A.w, 0], [ox + A.w, 0, ox + A.w, A.h], [ox + A.w, A.h, ox, A.h], [ox, A.h, ox, 0]);
+  } else {
+    art = b.artwork || paintWrap(b, A.w / A.h, 3000);
+    cuts = [[0, 0, mmW, 0], [mmW, 0, mmW, mmH], [mmW, mmH, 0, mmH], [0, mmH, 0, 0]];
+  }
+  return printPDF({ art, mmW, mmH, cuts, folds, title: `${b.name} - ${PRODUCT_NAMES[P]}` });
+}
+$('#dl-pdf').addEventListener('click', () => { download(printFile(), `${slug()}-${state.product}-print.pdf`); toast('Print-ready PDF downloaded'); });
 $('#dl-png').addEventListener('click', async () => { const [w, h] = size(); download(await studio.snapshot(w, h), `${slug()}-${state.product}.png`); });
 $('#dl-alpha').addEventListener('click', async () => { const [w, h] = size(); download(await studio.snapshot(w, h, { transparent: true }), `${slug()}-${state.product}-transparent.png`); });
 $('#dl-logo').addEventListener('click', () => {
@@ -448,11 +488,23 @@ const IDEAS = [
   ['Diwali mithai gift box', 'Shubh Mithai'],
 ];
 const wz = { product: '', vibes: [], colors: [], logo: null, choice: null };
-let wzPage = 1;
+let wzPage = 1, wzDir = 1;
+// the step bar shared by the start screens and the Logo Studio
+function setJourney(n) {
+  $$('.jsteps li').forEach((li) => { const j = +li.dataset.j; li.classList.toggle('on', j === n); li.classList.toggle('done', j < n); li.classList.toggle('skip', j === 4 && wz.choice && wz.choice !== 'make'); });
+}
+// scrolling moves through the journey too (but never while typing)
+let wheelLock = 0;
+$('#start').addEventListener('wheel', (e) => {
+  if (document.activeElement?.matches('textarea, input') || Date.now() < wheelLock || Math.abs(e.deltaY) < 30) return;
+  wheelLock = Date.now() + 900;
+  if (e.deltaY > 0 && !$('#wz-go').disabled && wzPage < 3 && (wzPage !== 2 || $('#wz-what').value.trim())) wzShow(wzPage + 1);
+  else if (e.deltaY < 0 && wzPage > 1) wzShow(wzPage - 1);
+}, { passive: true });
 function wzShow(n) {
-  wzPage = Math.max(1, Math.min(3, n));
+  const next = Math.max(1, Math.min(3, n)); wzDir = next >= wzPage ? 1 : -1; $('#wizard').dataset.dir = wzDir; wzPage = next;
   $$('.wz-page').forEach((p) => { p.hidden = +p.dataset.page !== wzPage; });
-  $$('.wz-dots i').forEach((d, i) => d.classList.toggle('on', i < wzPage));
+  setJourney(wzPage);
   $('#wz-back').style.visibility = wzPage > 1 ? 'visible' : 'hidden';
   const go = $('#wz-go');
   go.textContent = wzPage < 3 ? 'Next' : wz.choice === 'make' ? '✦ Design my logo' : '✦ Design my packaging';
@@ -544,5 +596,42 @@ document.fonts.ready.then(async () => {
   const demo = designLocally("Premium masala chai called 'Kesar Chai' — warm, traditional")[0];
   await applyPlan({ ...demo, product: 'pouch' }, { keepUploaded: false });
   current = snap(); history.past = []; updUndo();
-  openWizard();
+  // the start page: real packs built by the same engine
+  const allFonts = Object.keys(FONTS); await loadFonts(...allFonts);
+  $('.lp-clean').src = renderLogo(designLogos({ name: 'Tulsi Leaf', brief: 'tulsi tea', type: 'symbol', prefs: { modern: 0.3 }, colors: ['#1f4d3a', '#c8553d'] })[0]).canvas.toDataURL();
+  landing = initLanding({ demos: buildDemos, onStart: () => { studio.paused = false; setTimeout(openWizard, 380); }, onHow: () => $('#how').showModal() });
 });
+let landing = null;
+function openLanding() {
+  for (const d of $$('dialog[open]')) d.close();
+  studio.paused = true; landing?.show();
+}
+// demo brands for the start page
+function demoBrand(o) {
+  let p = designLocally(o.brief)[o.idx ?? 0];
+  p = normalizePlan({ ...p, name: o.name, product: o.product, style: o.style || p.style, centre: o.centre || 'none', border: { type: o.border || p.border.type },
+    pattern: o.pattern ? { type: o.pattern, opacity: 0.14 } : p.pattern, palette: o.palette ? { ...p.palette, ...o.palette } : p.palette, tagline: o.tagline || p.tagline, detail: o.detail || p.detail });
+  const dark = luminance(p.palette.pack) < luminance(p.palette.accent) ? p.palette.pack : p.palette.accent;
+  const spec = designLogos({ name: o.name, brief: o.brief, type: o.type || 'wordmark', prefs: STYLE_PREFS[p.style] || {}, colors: [dark, p.palette.accent] })[o.li || 0];
+  const b = { ...state.brand, fonts: { ...p.fonts }, pattern: { ...p.pattern, image: null }, border: { type: p.border.type, size: 0.06, inset: 0.045, color: o.bcol || 'accent', corners: false, image: null },
+    name: p.name, tagline: p.tagline, detail: p.detail, pack: p.palette.pack, accent: p.palette.accent, ink: null, style: p.style, centre: p.centre,
+    logoSpec: spec, logoSource: 'spec', logoScale: 1, logoY: 0, logoPlate: false, artwork: null, textScale: 1 };
+  b.logo = specLogo(b); b.logoHasName = true;
+  return b;
+}
+function buildDemos(renderer) {
+  const D = [
+    ['can', { brief: 'Sparkling lemonade, playful and fun', name: 'Fizz & Co', product: 'can', style: 'bold', centre: 'sunburst', tagline: 'Sparkling lemonade' }],
+    ['card', { brief: 'Handmade polymer clay keychains, cute', name: 'Knot & Key', product: 'card', style: 'classic', centre: 'frame', type: 'symbol', tagline: 'Handmade keychains', detail: '1 piece' }],
+    ['pouch', { brief: "Masala chai called 'Kesar Chai' — warm, traditional", name: 'Kesar Chai', product: 'pouch', style: 'heritage', centre: 'arch', border: 'jali' }],
+    ['bottle', { brief: 'Cold-pressed hair oil, natural, minimal', name: 'Bloom', product: 'bottle', style: 'minimal', tagline: 'Cold-pressed hair oil' }],
+    ['tube', { brief: 'Rose face cream, cute beauty', name: 'Glow Lab', product: 'tube', style: 'bold', centre: 'spotlight', tagline: 'Rose face cream' }],
+    ['cup', { brief: 'Cold brew coffee to go, modern', name: 'Brew Theory', product: 'cup', style: 'minimal', centre: 'band', tagline: 'Cold brew, done right' }],
+    ['bag', { brief: 'Handmade soy candles gift shop, luxury', name: 'Diya & Co.', product: 'bag', style: 'classic', centre: 'frame', border: 'deco', bcol: 'gold' }],
+    ['box0', { brief: 'Dark chocolate gift box, premium', name: 'Cocoa Club', product: 'box', style: 'classic', centre: 'frame', border: 'deco', bcol: 'gold', tagline: 'Single-origin dark chocolate' }],
+    ['box1', { brief: 'Dark chocolate gift box, traditional festive', name: 'Cocoa Club', product: 'box', style: 'heritage', centre: 'arch', border: 'jali', palette: { pack: '#5a1426', accent: '#d9b46a' }, tagline: 'Festive gift edition' }],
+    ['box2', { brief: 'Chocolate box, playful for kids', name: 'Cocoa Club', product: 'box', style: 'bold', centre: 'sunburst', border: 'checker', palette: { pack: '#f3b6c8', accent: '#2a1d16' }, tagline: 'Milk choc bites' }],
+    ['box3', { brief: 'Chocolate, minimal modern', name: 'Cocoa Club', product: 'box', style: 'minimal', centre: 'none', border: 'crop', tagline: '72% dark' }],
+  ];
+  return D.map(([key, o]) => { const b = demoBrand(o); return { key, built: BUILDERS[o.product](b, { ...DEFAULTS[o.product], finish: o.product === 'can' ? 'metallic' : 'gloss', fold: 1 }, renderer) }; });
+}

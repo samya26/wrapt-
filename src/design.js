@@ -1,9 +1,9 @@
 // The "design plan": a small JSON object that fully describes a packaging design.
 // The AI (or the built-in designer) writes plans; Wrapt's engine draws them.
 // Because a plan is data, not a picture, every result stays editable.
-import { contrast, luminance, mix, isDark, autoInk, readable, averageColor, logoCoverage, paper, ink, FONTS, PATTERNS, BORDERS, borderType } from './art.js';
+import { contrast, luminance, mix, isDark, autoInk, readable, averageColor, logoCoverage, plainCorners, paper, ink, FONTS, PATTERNS, BORDERS, CENTRES, borderType } from './art.js';
 
-export const PRODUCTS = ['can', 'box', 'tub', 'jar', 'pouch'];
+export const PRODUCTS = ['can', 'box', 'tub', 'jar', 'pouch', 'bottle', 'tube', 'papertube', 'cup', 'card', 'bag'];
 export const STYLES = ['classic', 'bold', 'minimal', 'heritage'];
 export const PLAN_KEYS = { product: PRODUCTS, style: STYLES, fontsDisplay: Object.keys(FONTS), pattern: Object.keys(PATTERNS).filter((p) => p !== 'none').concat('none'), border: Object.keys(BORDERS).filter((b) => b !== 'image'), finish: ['gloss', 'matte', 'metallic'], light: ['studio', 'sunlit', 'dramatic'] };
 
@@ -31,13 +31,32 @@ const PALETTES = {
 };
 const COLOR_WORDS = { red: '#c0392b', green: '#2f7d4a', blue: '#2a5ca8', yellow: '#f2c230', orange: '#ec7b2c', pink: '#ee8fb0', purple: '#6c3b9e', black: '#141414', white: '#f6f3ee', gold: '#c9a35a', brown: '#5a3624', maroon: '#6e1423', teal: '#1f7a7a', cream: '#f3e7cf', navy: '#1b2a4a' };
 
+// Which packs make sense for what they sell (no keychains in a drink can).
+const PACK_RULES = [
+  [['keychain', 'key chain', 'charm', 'jewel', 'earring', 'necklace', 'bracelet', 'accessor', 'sticker', 'bookmark', 'hair clip', 'scrunch', 'crochet', 'phone case', 'toy', 'stationery', 'polymer clay', 'resin', 'pin badge', 'magnet'], ['card', 'box', 'bag', 'pouch']],
+  [['cloth', 't-shirt', 'tshirt', 'saree', 'kurta', 'apparel', 'scarf', 'socks', 'shoe', 'sneaker', 'tote', 'fashion'], ['bag', 'box', 'card', 'pouch']],
+  [['candle', 'wax', 'incense', 'agarbatti', 'dhoop'], ['jar', 'box', 'papertube']],
+  [['skincare', 'serum', 'lotion', 'shampoo', 'hair oil', 'face wash', 'lip', 'nail', 'makeup', 'perfume', 'soap', 'balm', 'sunscreen', 'face cream', 'body wash', 'cosmetic'], ['bottle', 'tube', 'jar', 'box']],
+  [['ice cream', 'icecream', 'kulfi', 'dessert', 'curd', 'yogurt', 'kheer', 'pudding', 'mousse', 'gelato'], ['tub', 'cup', 'jar', 'box']],
+  [['juice', 'soda', 'kombucha', 'beer', 'drink', 'cola', 'energy', 'sparkling', 'cold brew', 'water', 'lemonade', 'smoothie', 'milkshake', 'shake'], ['can', 'bottle', 'cup', 'pouch']],
+  [['sauce', 'ketchup', 'oil', 'vinegar', 'syrup', 'dressing'], ['bottle', 'jar', 'pouch']],
+  [['pickle', 'achaar', 'achar', 'jam', 'honey', 'ghee', 'chutney', 'spread', 'butter'], ['jar', 'bottle', 'pouch']],
+  [['coffee', 'espresso', 'beans'], ['pouch', 'box', 'papertube', 'can', 'cup']],
+  [['tea', 'chai', 'tulsi', 'matcha', 'kahwa'], ['box', 'pouch', 'papertube', 'jar']],
+  [['cookie', 'cake', 'brownie', 'bread', 'bakery', 'chocolate', 'mithai', 'sweets', 'laddoo', 'barfi', 'dessert box'], ['box', 'bag', 'tub', 'pouch']],
+  [['snack', 'chips', 'namkeen', 'granola', 'nuts', 'makhana', 'flour', 'pasta', 'spice', 'masala', 'rice', 'dal', 'cereal', 'oats', 'millet'], ['pouch', 'box', 'jar', 'papertube']],
+  [['pet', 'dog', 'cat'], ['pouch', 'box', 'bag']],
+];
+const NAMED = { 'paper tube': 'papertube', 'gift tube': 'papertube', 'hang card': 'card', 'header card': 'card', 'shopping bag': 'bag', 'paper bag': 'bag', 'squeeze tube': 'tube' };
+export function allowedPacks(t) {
+  t = ` ${String(t).toLowerCase()} `;
+  for (const [words, packs] of PACK_RULES) if (KW(t, words)) return packs;
+  return ['box', 'pouch', 'bag', 'bottle', 'card'];
+}
 export function detectProduct(t) {
-  for (const p of PRODUCTS) if (new RegExp(`\\b${p}\\b`).test(t)) return p; // user named the pack
-  if (KW(t, ['ice cream', 'icecream', 'kulfi', 'dessert', 'curd', 'yogurt', 'kheer', 'pudding', 'mousse'])) return 'tub';
-  if (KW(t, ['juice', 'soda', 'kombucha', 'beer', 'drink', 'cola', 'energy', 'sparkling', 'cold brew'])) return 'can';
-  if (KW(t, ['pickle', 'achaar', 'achar', 'jam', 'honey', 'ghee', 'chutney', 'spread', 'face cream', 'balm', 'butter'])) return 'jar';
-  if (KW(t, ['chai', 'tea', 'coffee', 'masala', 'spice', 'snack', 'chips', 'namkeen', 'granola', 'nuts', 'pouch', 'makhana', 'flour'])) return 'pouch';
-  return 'box';
+  for (const [k, v] of Object.entries(NAMED)) if (t.includes(k)) return v;
+  for (const p of PRODUCTS) if (new RegExp(`\\b${p}s?\\b`).test(t)) return p; // user named the pack
+  return allowedPacks(t)[0];
 }
 function detectPalette(t) {
   const order = [['mango', ['mango', 'aam']], ['pickle', ['pickle', 'achaar', 'achar']], ['chocolate', ['chocolate', 'brownie', 'cocoa']], ['coffee', ['coffee', 'espresso']], ['tea', ['chai', 'tea']], ['herbal', ['herbal', 'organic', 'ayurved', 'natural', 'tulsi', 'neem', 'green']], ['spice', ['spice', 'masala', 'chili', 'mirch', 'hot']], ['honey', ['honey', 'ghee']], ['rose', ['rose', 'skincare', 'beauty', 'soap', 'candle']], ['ocean', ['ocean', 'sea', 'water', 'fresh']], ['berry', ['berry', 'jamun', 'grape']], ['dairy', ['milk', 'dairy', 'curd', 'paneer', 'yogurt']], ['lemon', ['lemon', 'lime', 'nimbu', 'citrus']], ['festive', ['diwali', 'festive', 'wedding', 'mithai', 'gift', 'sweets']], ['kids', ['kids', 'children', 'fun', 'candy']], ['luxe', ['luxury', 'luxe', 'perfume', 'premium']]];
@@ -75,7 +94,8 @@ export function designLocally(brief, { refColors = [], hasLogo = false } = {}) {
   const traditional = KW(t, ['traditional', 'desi', 'indian', 'homemade', 'heritage', 'amma', 'nani', 'dadi', 'festive', 'diwali', 'mithai', 'handmade', 'village', 'ethnic', 'achaar', 'pickle']);
   const hindi = /[ऀ-ॿ]/.test(name);
   const tagline = KW(t, ['homemade', 'amma', 'nani', 'mom']) ? 'Made the way it is at home' : KW(t, ['organic', 'natural', 'herbal']) ? 'Pure, honest, natural' : KW(t, ['premium', 'luxury']) ? 'Crafted in small batches' : 'Made with care';
-  const detail = { jar: 'Net wt. 250 g', can: '330 ml', tub: 'Net wt. 450 g', pouch: 'Net wt. 200 g', box: 'Net wt. 250 g' }[product];
+  const accessory = allowedPacks(t)[0] === 'card' || allowedPacks(t)[0] === 'bag';
+  const detail = accessory ? 'Handmade · 1 piece' : { jar: 'Net wt. 250 g', can: '330 ml', tub: 'Net wt. 450 g', pouch: 'Net wt. 200 g', box: 'Net wt. 250 g', bottle: '250 ml', tube: '100 ml', papertube: 'Net wt. 100 g', cup: '350 ml', card: '1 piece', bag: 'Gift bag' }[product];
   const deeper = luminance(base) < luminance(acc) ? base : acc;
   const dark = isDark(deeper) ? deeper : mix(deeper, '#14100c', 0.45);
   const light = isDark(base) ? mix(acc, '#ffffff', 0.82) : mix(base, '#ffffff', 0.86);
@@ -126,6 +146,7 @@ export function refineLocally(plan, instruction) {
   if (KW(t, ['no pattern', 'remove pattern', 'without pattern'])) { p.pattern.type = 'none'; did.push('pattern removed'); }
   for (const [k, v] of Object.entries(BORDERS)) if (k !== 'none' && k !== 'image' && t.includes(v.toLowerCase())) { p.border = { type: k }; did.push(`${v} border`); }
   if (KW(t, ['no border', 'remove border', 'without border'])) { p.border = { type: 'none' }; did.push('border removed'); }
+  for (const [k, v] of Object.entries(CENTRES)) if (k !== 'none' && t.includes(v.toLowerCase())) { p.centre = k; did.push(`${v} centre`); }
   if (KW(t, ['bigger logo', 'larger logo', 'logo bigger'])) { p.logoScale = Math.min(1.4, (p.logoScale || 1) + 0.2); did.push('bigger logo'); }
   if (KW(t, ['smaller logo', 'logo smaller'])) { p.logoScale = Math.max(0.5, (p.logoScale || 1) - 0.2); did.push('smaller logo'); }
   for (const prod of PRODUCTS) if (new RegExp(`\\b${prod}\\b`).test(t)) { p.product = prod; did.push(`on a ${prod}`); }
@@ -142,6 +163,7 @@ export function normalizePlan(p, { hasLogo } = {}) {
   const hexOk = (c, d) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : d);
   p = { ...p };
   p.product = pick(p.product, PRODUCTS, 'box');
+  p.centre = pick(p.centre, Object.keys(CENTRES), { classic: 'frame', minimal: 'none', bold: 'sunburst', heritage: 'arch' }[p.style] || 'none');
   p.style = pick(p.style, STYLES, 'classic');
   p.palette = { pack: hexOk(p.palette?.pack, '#26324a'), accent: hexOk(p.palette?.accent, '#e9a03b'), background: hexOk(p.palette?.background, '#efe9df') };
   // make sure accent text/rules read on the pack (the AI sometimes picks two mid-tones)
@@ -175,6 +197,16 @@ export function audit(b, product) {
   if (Math.abs(b.logoY ?? 0) > 0.12) out.push({ level: 'low', msg: 'Logo is close to the top/bottom edge.', fix: 'Centre logo', patch: { logoY: 0 } });
   if ((b.tagline || '').length > 38) out.push({ level: 'low', msg: 'Tagline is long — it will be shrunk to fit and may get small.', fix: null });
   if ((b.pattern?.opacity ?? 0) > 0.4 && b.style !== 'heritage' && b.pattern?.type !== 'none') out.push({ level: 'mid', msg: 'Pattern is strong and competes with the logo.', fix: 'Soften pattern', patch: { pattern: { ...b.pattern, opacity: 0.16 } } });
+  // text over a busy pattern or a centre shape: check against what is actually behind it
+  const pt = b.pattern?.type, po = b.pattern?.opacity ?? 0;
+  if (pt && pt !== 'none' && !b.pattern?.image) {
+    const behind = mix(pap, b.accent, Math.min(1, po * (['stripes', 'chevron'].includes(pt) ? 1.6 : 1.1)));
+    if (contrast(fg, behind) < 3.2 || (['stripes', 'chevron'].includes(pt) && po > 0.22)) out.push({ level: 'mid', msg: 'Text sits on a busy pattern and is harder to read than it looks.', fix: 'Soften pattern', patch: { pattern: { ...b.pattern, opacity: 0.1 } } });
+  }
+  if (b.logoSource === 'upload' && b.logo && logoCoverage(b.logo) > 0.97) {
+    if (plainCorners(b.logo)) out.push({ level: 'high', msg: 'Your logo has a solid background box around it.', fix: 'Remove background', patch: { _removeBg: true } });
+    else out.push({ level: 'high', msg: 'This looks like a photo, not a logo — it will look pasted on.', fix: 'Design a logo instead', patch: { _studio: true } });
+  }
   if (b.artwork) out.push({ level: 'low', msg: 'Using your own artwork — audit checks only the colours Wrapt controls.', fix: null });
   return out;
 }
