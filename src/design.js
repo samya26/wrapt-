@@ -236,3 +236,86 @@ export async function askAI(body) {
     return await r.json();
   } catch (e) { return { error: 'AI not reachable', unavailable: true }; }
 }
+
+// ---------- six genuinely different directions ----------
+// Each "vibe" is a whole look: layout, type, border, pattern, finish, light and a family of palettes.
+// The AI (or the built-in designer) supplies the words; vibes guarantee no two concepts look alike.
+export const VIBES = {
+  pop: { concept: 'Bright & playful', style: 'poster', fonts: { display: 'Bricolage Grotesque', body: 'Space Grotesk' }, border: 'none', centre: 'none', pattern: { type: 'dots', opacity: 0.14 }, finish: 'gloss', light: 'sunlit',
+    colour: 'Sunny, saturated colours with one punchy contrast — impossible to miss on a shelf or a feed.',
+    palettes: [{ pack: '#ffd23f', accent: '#e4572e', background: '#fff4d6' }, { pack: '#ff8fab', accent: '#3a0ca3', background: '#ffe5ec' }, { pack: '#7bdff2', accent: '#f15bb5', background: '#e8fbff' }, { pack: '#b8e04a', accent: '#2d3a8c', background: '#f3fadf' }] },
+  pastel: { concept: 'Soft & sweet', style: 'label', fonts: { display: 'Young Serif', body: 'Inter' }, border: 'wavy', centre: 'none', pattern: { type: 'none', opacity: 0 }, finish: 'matte', light: 'studio',
+    colour: 'Gentle pastels with a deep matching tone for the words — friendly, giftable, calm.',
+    palettes: [{ pack: '#f7c6d0', accent: '#8c3b56', background: '#fdf0f3' }, { pack: '#cdb4db', accent: '#4a2c6d', background: '#f4eef8' }, { pack: '#bde0c6', accent: '#2f5d46', background: '#eef7f0' }, { pack: '#ffd6a5', accent: '#8a4b1f', background: '#fff3e3' }] },
+  luxe: { concept: 'Dark luxe', style: 'monogram', fonts: { display: 'Cormorant Garamond', body: 'Inter' }, border: 'deco', centre: 'none', pattern: { type: 'none', opacity: 0 }, finish: 'metallic', light: 'dramatic',
+    colour: 'A deep, inky base with warm metallic gold — the colours of a premium gift.',
+    palettes: [{ pack: '#14213d', accent: '#d4a84b', background: '#0d1424' }, { pack: '#1b1b1b', accent: '#c9a86a', background: '#2a2a2a' }, { pack: '#3d0c11', accent: '#e0b973', background: '#1f0609' }, { pack: '#0f3d3e', accent: '#e6c08a', background: '#0a2a2b' }] },
+  clean: { concept: 'Clean minimal', style: 'minimal', fonts: { display: 'Syne', body: 'Inter' }, border: 'none', centre: 'none', pattern: { type: 'none', opacity: 0 }, finish: 'matte', light: 'studio',
+    colour: 'Almost-white with a single confident colour — modern, honest and easy to trust.',
+    palettes: [{ pack: '#2b59c3', accent: '#2b59c3', background: '#eef2fa' }, { pack: '#1f7a5a', accent: '#1f7a5a', background: '#eaf4ef' }, { pack: '#d1495b', accent: '#d1495b', background: '#fbecee' }, { pack: '#222222', accent: '#222222', background: '#efefef' }] },
+  craft: { concept: 'Earthy craft', style: 'classic', fonts: { display: 'Marcellus', body: 'Inter' }, border: 'stitched', centre: 'none', pattern: { type: 'botanical', opacity: 0.1 }, finish: 'matte', light: 'sunlit',
+    colour: 'Kraft, clay and olive tones — it looks handmade, natural and small-batch.',
+    palettes: [{ pack: '#c8a27a', accent: '#4a3222', background: '#efe4d6' }, { pack: '#7a8450', accent: '#f3ead3', background: '#e7e5d5' }, { pack: '#b5562f', accent: '#f6e7cf', background: '#f2e1d3' }, { pack: '#e9dcc4', accent: '#6b3e26', background: '#f6efe2' }] },
+  editorial: { concept: 'Bold editorial', style: 'editorial', fonts: { display: 'Abril Fatface', body: 'Inter' }, border: 'crop', centre: 'none', pattern: { type: 'none', opacity: 0 }, finish: 'matte', light: 'studio',
+    colour: 'Paper-white with one loud colour, like a magazine cover.',
+    palettes: [{ pack: '#f4efe6', accent: '#e63946', background: '#e9e3d8' }, { pack: '#f7f3ec', accent: '#1d3557', background: '#e7e2d6' }, { pack: '#fffaf0', accent: '#2a9d8f', background: '#ece7da' }, { pack: '#f2f0eb', accent: '#ff5d00', background: '#e6e2d9' }] },
+  heritage: { concept: 'Indian heritage', style: 'heritage', fonts: { display: 'Rozha One', body: 'Inter' }, border: 'jali', centre: 'none', pattern: { type: 'blockprint', opacity: 0.16 }, finish: 'matte', light: 'sunlit',
+    colour: 'Jewel tones with marigold and saffron — festive, rooted and proud.',
+    palettes: [{ pack: '#8b1e3f', accent: '#f2c14e', background: '#f5e6d3' }, { pack: '#1f4e5f', accent: '#f4a259', background: '#e6eef0' }, { pack: '#2e6b3a', accent: '#f6d27a', background: '#ecf1e4' }, { pack: '#5b2a86', accent: '#f7b538', background: '#efe7f5' }] },
+};
+const STYLE_VIBE = { poster: 'pop', label: 'pastel', monogram: 'luxe', minimal: 'clean', classic: 'craft', editorial: 'editorial', heritage: 'heritage' };
+function hsl(hex) {
+  const n = parseInt(String(hex).slice(1), 16), r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1)); let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, s, l];
+}
+// how different two palettes look (0 = identical); compares the pack colour and the accent
+function palDist(a, b) {
+  const one = (x, y) => { const [h1, s1, l1] = hsl(x), [h2, s2, l2] = hsl(y), dh = Math.min(Math.abs(h1 - h2), 360 - Math.abs(h1 - h2)) / 180; return dh * Math.min(s1, s2) * 1.6 + Math.abs(l1 - l2) * 1.4 + Math.abs(s1 - s2) * 0.6; };
+  return one(a.pack, b.pack) + one(a.accent, b.accent) * 0.6;
+}
+export function diversify(plans, brief = '', seed = Math.random()) {
+  const t = String(brief).toLowerCase(), has = (w) => w.some((x) => t.includes(x));
+  let order = ['pop', 'pastel', 'luxe', 'clean', 'craft', 'editorial'];
+  if (has(['traditional', 'indian', 'desi', 'masala', 'chai', 'ayurved', 'mithai', 'pickle', 'achaar', 'heritage', 'festive', 'diwali'])) order = ['heritage', 'craft', 'luxe', 'editorial', 'pop', 'clean'];
+  else if (has(['premium', 'luxury', 'elegant', 'gift'])) order = ['luxe', 'editorial', 'clean', 'craft', 'pastel', 'pop'];
+  else if (has(['natural', 'organic', 'handmade', 'herbal', 'eco'])) order = ['craft', 'clean', 'pastel', 'luxe', 'editorial', 'pop'];
+  else if (has(['kid', 'cute', 'fun', 'candy', 'toy', 'magnet', 'sticker', 'sweet'])) order = ['pop', 'pastel', 'craft', 'editorial', 'luxe', 'clean'];
+  // keep the AI's best idea first: give it the vibe that matches its layout
+  const firstVibe = STYLE_VIBE[plans[0]?.style];
+  if (firstVibe) order = [firstVibe, ...order.filter((v) => v !== firstVibe)].slice(0, 6);
+  if (order.length < 6) order.push(...Object.keys(VIBES).filter((v) => !order.includes(v)).slice(0, 6 - order.length));
+  const pool = [...plans], out = [], used = { fonts: new Set(), borders: new Set(), patterns: new Set(), names: new Set() };
+  let k = Math.floor(seed * 4);
+  order.forEach((vk, i) => {
+    const v = VIBES[vk];
+    const j = pool.findIndex((p) => STYLE_VIBE[p.style] === vk); const base = j >= 0 ? pool.splice(j, 1)[0] : pool.shift() || plans[i % plans.length] || {};
+    const p = { ...base, style: v.style, reasoning: { ...(base.reasoning || {}) } };
+    // colours: keep the AI's palette only if it clearly differs from every concept so far
+    const own = base.palette && STYLE_VIBE[base.style] === vk ? base.palette : null;
+    if (own && out.every((o) => palDist(o.palette, own) > 0.55)) p.palette = own;
+    else {
+      const cands = v.palettes.map((pal, n) => v.palettes[(n + k) % v.palettes.length]);
+      p.palette = { ...(cands.find((pal) => out.every((o) => palDist(o.palette, pal) > 0.55)) || cands[0]) };
+      p.reasoning.colour = v.colour;
+    }
+    k++;
+    const fontOk = own && base.fonts?.display && !used.fonts.has(base.fonts.display);
+    p.fonts = fontOk ? base.fonts : { ...v.fonts };
+    if (!fontOk) p.reasoning.type = `${v.fonts.display} sets the tone for this direction.`;
+    const bt = borderType(base.border?.type);
+    p.border = { type: own && bt !== 'none' && !used.borders.has(bt) ? bt : v.border };
+    p.centre = ['poster', 'label', 'monogram', 'editorial'].includes(v.style) ? 'none' : own && base.centre && base.centre !== 'none' ? base.centre : v.centre;
+    const pt = base.pattern?.type;
+    p.pattern = own && pt && pt !== 'none' && !used.patterns.has(pt) ? base.pattern : { ...v.pattern };
+    p.finish = v.finish; p.light = v.light;
+    let name = String(base.concept || '').replace(/\b(\w+)\s+\1\b/gi, '$1').trim();
+    if (!name || used.names.has(name.toLowerCase()) || !own) name = v.concept;
+    p.concept = name;
+    used.fonts.add(p.fonts.display); if (p.border.type !== 'none') used.borders.add(p.border.type); if (p.pattern.type !== 'none') used.patterns.add(p.pattern.type); used.names.add(name.toLowerCase());
+    out.push(p);
+  });
+  return out;
+}

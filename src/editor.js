@@ -1,6 +1,6 @@
 // Artwork editor: add your own text, paragraphs, shapes, icons and images on top of the
 // AI design — on the front or the back — then drag, resize and rotate them.
-import { paintFace, FONTS, SHAPE_PATHS, OPEN_SHAPES, ink, paper, autoInk } from './art.js';
+import { paintFace, FONTS, SHAPE_PATHS, OPEN_SHAPES, ink, paper, autoInk, withRecording } from './art.js';
 import { GLYPHS } from './logo.js';
 
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
@@ -42,12 +42,65 @@ const ICONS = [...Object.keys(CUTE), 'leaf', 'sprout', 'sun', 'drop', 'flame', '
 let E = null; // { brand, layers, face, aspect, wrap, sel, onDone, onCancel }
 
 export function openEditor({ brand, aspect, wrap, face = 'front', onDone }) {
-  E = { brand, layers: (brand.layers || []).map((l) => ({ ...l })), face, aspect, wrap, sel: null, onDone };
+  E = { brand, layers: (brand.layers || []).map((l) => ({ ...l })), els: JSON.parse(JSON.stringify(brand.els || {})), found: [], selEl: null, past: [], future: [], face, aspect, wrap, sel: null, onDone };
+  updEdUndo();
   $('#editor').showModal();
   setFace(face);
 }
 
-function b2() { return { ...E.brand, layers: E.layers, _wrapK: E.wrap ? 0.66 : 1, artwork: null }; }
+function b2() { return { ...E.brand, layers: E.layers, els: E.els, _wrapK: E.wrap ? 0.66 : 1, artwork: null }; }
+// ---------- undo / redo inside the editor ----------
+let lastSave = 0;
+function save(merge = false) {
+  const now = Date.now(); if (merge && now - lastSave < 800) { lastSave = now; return; } lastSave = now;
+  E.past.push({ layers: E.layers.map((l) => ({ ...l })), els: JSON.parse(JSON.stringify(E.els)) }); if (E.past.length > 80) E.past.shift();
+  E.future = []; updEdUndo();
+}
+function step(dir) {
+  const from = dir < 0 ? E.past : E.future, to = dir < 0 ? E.future : E.past; if (!from.length) return;
+  to.push({ layers: E.layers.map((l) => ({ ...l })), els: JSON.parse(JSON.stringify(E.els)) });
+  const s = from.pop(); E.layers = s.layers; E.els = s.els; lastSave = 0;
+  if (!E.layers.some((l) => l.id === E.sel)) E.sel = null;
+  render(); props(); layerList(); updEdUndo();
+}
+function updEdUndo() { $('#ed-undo').disabled = !E?.past.length; $('#ed-redo').disabled = !E?.future.length; }
+// ---------- picking pieces of the design itself ----------
+const hctx = document.createElement('canvas').getContext('2d');
+const scaleOf = (m) => Math.hypot(m.a, m.b) || 1;
+function hitEl(p) {
+  const c = $('#ed-canvas'), X = p.x * c.width, Y = p.y * c.height, tol = c.width / 90;
+  const vis = E.found.filter((f) => !f.hidden && !f.noHit && f.path).reverse();
+  const test = (f) => { hctx.setTransform(f.m); if (f.op === 'stroke') { hctx.lineWidth = Math.max(f.lw, tol / scaleOf(f.m)); return hctx.isPointInStroke(f.path, X, Y); } return hctx.isPointInPath(f.path, X, Y); };
+  const solid = (f) => f.kind === 'text' || f.kind === 'logo';
+  return vis.find((f) => solid(f) && test(f)) || vis.find((f) => !solid(f) && f.op === 'stroke' && test(f)) || vis.find((f) => !solid(f) && f.op === 'fill' && test(f));
+}
+function drawHL() {
+  const hl = $('#ed-hl'), o = $('#ed-over').getBoundingClientRect(), dpr = devicePixelRatio || 1;
+  hl.width = Math.max(1, Math.round(o.width * dpr)); hl.height = Math.max(1, Math.round(o.height * dpr));
+  const g = hl.getContext('2d'); g.clearRect(0, 0, hl.width, hl.height);
+  if (!E?.selEl) return;
+  const k = hl.width / $('#ed-canvas').width;
+  for (const f of E.found) if (f.id === E.selEl && f.path) {
+    const m = new DOMMatrix().scaleSelf(k, k).multiplySelf(f.m), sc = scaleOf(m);
+    g.setTransform(m); g.strokeStyle = '#2f6bff';
+    if (f.op === 'stroke' && f.kind !== 'text' && f.kind !== 'logo') { g.globalAlpha = 0.5; g.setLineDash([]); g.lineWidth = f.lw + (5 * dpr) / sc; }
+    else { g.globalAlpha = 1; g.setLineDash([(6 * dpr) / sc, (4 * dpr) / sc]); g.lineWidth = (2 * dpr) / sc; }
+    g.stroke(f.path);
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+}
+const elOf = (id) => E.found.find((f) => f.id === id && f.path) || E.found.find((f) => f.id === id);
+function setEl(id, patch) { const e = { ...(E.els[id] || {}), ...patch }; for (const k of Object.keys(e)) if (e[k] == null) delete e[k]; if (Object.keys(e).length) E.els[id] = e; else delete E.els[id]; }
+function designItems() {
+  const seen = new Map(), count = {};
+  for (const f of E.found) { if (seen.has(f.id)) continue; seen.set(f.id, f); }
+  return [...seen.values()].map((f) => {
+    let name = f.label;
+    if (f.kind === 'text') name = `“${String(E.els[f.id]?.text ?? f.label).slice(0, 24)}”`;
+    else if (f.kind !== 'logo' && f.kind !== 'pattern') { count[f.label] = (count[f.label] || 0) + 1; name = `${f.label} ${count[f.label]}`; }
+    return { f, name };
+  });
+}
 let raf = 0;
 function render() {
   cancelAnimationFrame(raf);
@@ -56,15 +109,17 @@ function render() {
     const maxW = box.width - 40, maxH = box.height - 40;
     let cw = maxW, ch = cw / E.aspect; if (ch > maxH) { ch = maxH; cw = ch * E.aspect; }
     c.style.width = `${cw}px`; c.style.height = `${ch}px`;
-    const W = Math.round(Math.min(1400, cw * 2)), art = paintFace(b2(), E.face, E.aspect, W);
+    const W = Math.round(Math.min(1400, cw * 2)), [art, found] = withRecording(() => paintFace(b2(), E.face, E.aspect, W));
     c.width = art.width; c.height = art.height; c.getContext('2d').drawImage(art, 0, 0);
     $('#ed-safe').hidden = !E.wrap;
     const r = c.getBoundingClientRect(), sr = $('#ed-stage').getBoundingClientRect();
     Object.assign($('#ed-over').style, { left: `${r.left - sr.left}px`, top: `${r.top - sr.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    E.found = found;
     drawSel();
   });
 }
 function drawSel() {
+  drawHL();
   const l = E.layers.find((x) => x.id === E.sel), s = $('#ed-sel');
   if (!l || l.face !== E.face) { s.hidden = true; return; }
   const o = $('#ed-over').getBoundingClientRect(), w = l.w * o.width, h = (l.h ?? 0.1) * o.height;
@@ -72,11 +127,12 @@ function drawSel() {
   Object.assign(s.style, { left: `${l.x * o.width - w / 2}px`, top: `${l.y * o.height - h / 2}px`, width: `${w}px`, height: `${h}px`, transform: `rotate(${l.rot || 0}deg)` });
 }
 function setFace(f) {
-  E.face = f; E.sel = null;
+  E.face = f; E.sel = null; E.selEl = null;
   $$('[data-edface]').forEach((b) => b.classList.toggle('on', b.dataset.edface === f));
   render(); props(); layerList();
 }
 function add(l) {
+  save(); E.selEl = null;
   l = { id: uid(), face: E.face, x: 0.5, y: 0.5, rot: 0, opacity: 1, ...l };
   E.layers.push(l); E.sel = l.id; render(); props(); layerList();
 }
@@ -87,13 +143,30 @@ const sq = (f) => ({ w: f * Math.min(1, 1 / E.aspect), h: f * Math.min(1, E.aspe
 const brandCols = () => [...new Set([ink(E.brand), E.brand.accent, E.brand.pack, paper(E.brand), '#ffffff', '#1c1a17'])];
 
 function layerList() {
+  if (!E.found.length && E.layers.length === 0) setTimeout(() => E && E.found.length && layerList(), 120);
   const ls = E.layers.filter((l) => l.face === E.face);
-  $('#ed-layers').innerHTML = ls.length
-    ? ls.slice().reverse().map((l) => `<button type="button" data-edlayer="${l.id}" class="${l.id === E.sel ? 'on' : ''}"><span>${l.type === 'text' ? '𝐓' : l.type === 'image' ? '🖼' : l.type === 'icon' ? '✦' : '◼'}</span>${esc(l.type === 'text' ? (l.text || '').slice(0, 22) || 'Text' : l.type === 'shape' ? SHAPES[l.shape] : l.type === 'icon' ? l.name : 'Image')}</button>`).join('')
-    : '<p class="ed-empty">Nothing added on this side yet. Use the tools on the left.</p>';
+  const added = ls.length ? ls.slice().reverse().map((l) => `<button type="button" data-edlayer="${l.id}" class="${l.id === E.sel ? 'on' : ''}"><span>${l.type === 'text' ? '𝐓' : l.type === 'image' ? '🖼' : l.type === 'icon' ? '✦' : '◼'}</span>${esc(l.type === 'text' ? (l.text || '').slice(0, 22) || 'Text' : l.type === 'shape' ? SHAPES[l.shape] : l.type === 'icon' ? l.name : 'Image')}</button>`).join('') : '';
+  const items = designItems();
+  const design = items.map(({ f, name }) => `<div class="ed-el ${f.hidden ? 'off' : ''} ${f.id === E.selEl ? 'on' : ''}"><button type="button" data-elpick="${f.id}" ${f.hidden ? 'disabled' : ''}><span>${f.kind === 'text' ? '𝐓' : f.kind === 'logo' ? '◉' : f.kind === 'pattern' ? '▦' : f.op === 'stroke' ? '▭' : '◼'}</span>${esc(name)}</button><button type="button" class="eye" data-eltoggle="${f.id}" title="${f.hidden ? 'Bring it back' : 'Delete'}">${f.hidden ? 'Restore' : '✕'}</button></div>`).join('');
+  $('#ed-layers').innerHTML = (added ? `<small class="ed-sub">Added by you</small>${added}` : '') +
+    (design ? `<small class="ed-sub">From the design <button type="button" class="link small" data-elact="resetall">Reset all</button></small>${design}` : '') ||
+    '<p class="ed-empty">Nothing on this side yet. Use the tools on the left.</p>';
+}
+function elProps(f, P) {
+  const e = E.els[f.id] || {};
+  const sw = `<div class="ed-sw">${brandCols().map((c) => `<button type="button" style="--c:${c}" data-elset="color" data-v="${c}" class="${e.color === c ? 'on' : ''}"></button>`).join('')}<input type="color" data-elin="color" value="${/^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#1c1a17'}"/></div>`;
+  let h = `<p class="ed-kind">${f.kind === 'text' ? 'Text from the design' : f.kind === 'logo' ? 'Your logo' : esc(f.label)}</p>`;
+  if (f.kind === 'text') h += `<label class="ed-f"><span>Text</span><textarea data-elin="text" rows="2">${esc(e.text ?? f.text ?? f.label)}</textarea></label>`;
+  if (f.kind === 'text' || f.kind === 'logo') h += `<label class="ed-f"><span>Size</span><input type="range" min="0.3" max="2.5" step="0.02" value="${e.scale ?? 1}" data-elin="scale"/></label>`;
+  if (f.kind !== 'logo') h += `<div class="ed-f"><span>Colour</span>${sw}${e.color ? '<button type="button" class="link small" data-elset="color" data-v="">Original colour</button>' : ''}</div>`;
+  if (f.op === 'stroke' && f.kind !== 'text') h += `<label class="ed-f"><span>Thickness</span><input type="range" min="0.2" max="4" step="0.1" value="${e.width ?? 1}" data-elin="width"/></label>`;
+  h += `<p class="ed-tip">Drag it on the pack to move it.</p><div class="ed-acts"><button type="button" class="ghost small danger" data-elact="del">Delete</button>${E.els[f.id] ? '<button type="button" class="ghost small" data-elact="reset">Reset</button>' : ''}</div>`;
+  P.innerHTML = h;
 }
 function props() {
-  const l = E.layers.find((x) => x.id === E.sel), P = $('#ed-props');
+  const P = $('#ed-props');
+  if (E.selEl) { const f = elOf(E.selEl); if (f && !f.hidden) return elProps(f, P); E.selEl = null; }
+  const l = E.layers.find((x) => x.id === E.sel);
   if (!l) { P.innerHTML = '<p class="ed-empty">Select something on the pack to change it — or add text, shapes, icons and images from the left.</p>'; return; }
   const sw = (key) => `<div class="ed-sw">${brandCols().map((c) => `<button type="button" style="--c:${c}" data-edset="${key}" data-v="${c}" class="${l[key] === c ? 'on' : ''}"></button>`).join('')}<input type="color" data-edin="${key}" value="${/^#[0-9a-f]{6}$/i.test(l[key] || '') ? l[key] : '#1c1a17'}"/></div>`;
   let h = '';
@@ -139,11 +212,21 @@ export function initEditor() {
       const st = STICKERS[+d.edsticker], bgc = E.brand.accent, { w, h } = st.sq ? sq(0.27) : { w: sq(0.5).w, h: sq(0.13).h };
       add({ type: 'text', text: st.t, bg: st.bg, bgColor: bgc, color: autoInk(bgc), font: E.brand.fonts?.display || 'Inter', size: fitSize(st, w, h), weight: 700, upper: st.sq, spacing: st.sq ? 0.06 : 0.02, w, h, y: 0.24, x: E.wrap ? 0.64 : 0.74, rot: st.sq ? -10 : 0, align: 'center' });
     }
-    if (d.edlayer) { E.sel = d.edlayer; drawSel(); props(); layerList(); }
-    if (d.edset) { const l = E.layers.find((x) => x.id === E.sel); if (l) { l[d.edset] = d.v; render(); props(); } }
-    if (d.edtog) { const l = E.layers.find((x) => x.id === E.sel); if (l) { if (d.edtog === 'weight') l.weight = l.weight >= 700 ? 400 : 700; else l[d.edtog] = !l[d.edtog]; render(); props(); } }
+    if (d.edlayer) { E.sel = d.edlayer; E.selEl = null; drawSel(); props(); layerList(); }
+    if (d.elpick) { E.selEl = d.elpick; E.sel = null; drawSel(); props(); layerList(); }
+    if (d.eltoggle) { save(); const hid = E.els[d.eltoggle]?.hide; setEl(d.eltoggle, { hide: hid ? null : true }); if (E.selEl === d.eltoggle) E.selEl = null; render(); props(); setTimeout(layerList, 60); }
+    if (d.elset && E.selEl) { save(); setEl(E.selEl, { [d.elset]: d.v || null }); render(); props(); }
+    if (d.elact) {
+      save();
+      if (d.elact === 'resetall') { for (const k of Object.keys(E.els)) if (k.startsWith(E.face + ':')) delete E.els[k]; E.selEl = null; }
+      else if (E.selEl && d.elact === 'del') { setEl(E.selEl, { hide: true }); E.selEl = null; }
+      else if (E.selEl && d.elact === 'reset') delete E.els[E.selEl];
+      render(); props(); setTimeout(layerList, 60);
+    }
+    if (d.edset) { const l = E.layers.find((x) => x.id === E.sel); if (l) { save(); l[d.edset] = d.v; render(); props(); } }
+    if (d.edtog) { const l = E.layers.find((x) => x.id === E.sel); if (l) { save(); if (d.edtog === 'weight') l.weight = l.weight >= 700 ? 400 : 700; else l[d.edtog] = !l[d.edtog]; render(); props(); } }
     if (d.edact) {
-      const i = E.layers.findIndex((x) => x.id === E.sel); if (i < 0) return; const l = E.layers[i];
+      const i = E.layers.findIndex((x) => x.id === E.sel); if (i < 0) return; const l = E.layers[i]; save();
       if (d.edact === 'del') { E.layers.splice(i, 1); E.sel = null; }
       if (d.edact === 'dup') { const c = { ...l, id: uid(), x: Math.min(0.9, l.x + 0.04), y: Math.min(0.9, l.y + 0.04) }; E.layers.splice(i + 1, 0, c); E.sel = c.id; }
       if (d.edact === 'up' && i < E.layers.length - 1) [E.layers[i], E.layers[i + 1]] = [E.layers[i + 1], E.layers[i]];
@@ -152,11 +235,13 @@ export function initEditor() {
     }
   });
   dlg.addEventListener('input', (e) => {
-    const t = e.target, k = t.dataset.edin; if (!k) return;
-    const l = E.layers.find((x) => x.id === E.sel); if (!l) return;
+    const t = e.target;
+    if (t.dataset.elin && E.selEl) { save(true); const k = t.dataset.elin; setEl(E.selEl, { [k]: k === 'text' || k === 'color' ? t.value : +t.value }); render(); if (k === 'text') setTimeout(layerList, 60); return; }
+    const k = t.dataset.edin; if (!k) return;
+    const l = E.layers.find((x) => x.id === E.sel); if (!l) return; save(true);
     l[k] = num(k) ? +t.value : t.value; render(); if (k === 'text') layerList();
   });
-  dlg.addEventListener('change', (e) => { const t = e.target; if (t.dataset.edtogc) { const l = E.layers.find((x) => x.id === E.sel); if (l) { l[t.dataset.edtogc] = t.checked; render(); } } });
+  dlg.addEventListener('change', (e) => { const t = e.target; if (t.dataset.edtogc) { const l = E.layers.find((x) => x.id === E.sel); if (l) { save(); l[t.dataset.edtogc] = t.checked; render(); } } });
   $('#ed-img').addEventListener('change', async (e) => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     const img = new Image(); img.src = URL.createObjectURL(f); await img.decode();
@@ -172,14 +257,23 @@ export function initEditor() {
     let l = E.layers.find((x) => x.id === E.sel);
     if (!handle) {
       const hit = E.layers.filter((x) => x.face === E.face).reverse().find((x) => Math.abs(p.x - x.x) < x.w / 2 + 0.01 && Math.abs(p.y - x.y) < (x.h ?? 0.1) / 2 + 0.01);
-      E.sel = hit?.id || null; l = hit; props(); layerList(); drawSel();
-      if (!hit) return;
+      E.sel = hit?.id || null; l = hit;
+      if (!hit) { // not one of your layers: maybe a piece of the design itself
+        const f = hitEl(p); E.selEl = f?.id || null; props(); layerList(); drawSel();
+        if (!f) return;
+        save(); over.setPointerCapture(e.pointerId);
+        drag = { mode: 'el', start: p, orig: { dx: E.els[f.id]?.dx || 0, dy: E.els[f.id]?.dy || 0 } };
+        return;
+      }
+      E.selEl = null; props(); layerList(); drawSel();
     }
-    over.setPointerCapture(e.pointerId);
+    save(); over.setPointerCapture(e.pointerId);
     drag = { mode: handle || 'move', start: p, orig: { ...l } };
   });
   over.addEventListener('pointermove', (e) => {
-    if (!drag) return; const l = E.layers.find((x) => x.id === E.sel); if (!l) return;
+    if (!drag) return;
+    if (drag.mode === 'el') { const p = pt(e); setEl(E.selEl, { dx: drag.orig.dx + p.x - drag.start.x || null, dy: drag.orig.dy + p.y - drag.start.y || null }); render(); return; }
+    const l = E.layers.find((x) => x.id === E.sel); if (!l) return;
     const p = pt(e), o = drag.orig;
     if (drag.mode === 'move') { l.x = Math.min(1, Math.max(0, o.x + p.x - drag.start.x)); l.y = Math.min(1, Math.max(0, o.y + p.y - drag.start.y)); }
     else if (drag.mode === 'rot') { l.rot = Math.round((Math.atan2(p.y * p.r.height - l.y * p.r.height, p.x * p.r.width - l.x * p.r.width) * 180) / Math.PI + 90); }
@@ -192,15 +286,25 @@ export function initEditor() {
     render();
   });
   over.addEventListener('pointerup', () => { drag = null; props(); });
+  $('#ed-undo').onclick = () => step(-1); $('#ed-redo').onclick = () => step(1);
   addEventListener('keydown', (e) => {
-    if (!dlg.open || !E?.sel || /input|textarea|select/i.test(document.activeElement?.tagName)) return;
+    if (!dlg.open || /input|textarea|select/i.test(document.activeElement?.tagName)) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); step(e.shiftKey ? 1 : -1); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); step(1); return; }
+    if (E?.selEl) {
+      if (e.key === 'Delete' || e.key === 'Backspace') { save(); setEl(E.selEl, { hide: true }); E.selEl = null; render(); props(); setTimeout(layerList, 60); e.preventDefault(); return; }
+      if (e.key.startsWith('Arrow')) { save(true); const st = e.shiftKey ? 0.02 : 0.004, c = E.els[E.selEl] || {}; setEl(E.selEl, { dx: (c.dx || 0) + (e.key === 'ArrowLeft' ? -st : e.key === 'ArrowRight' ? st : 0) || null, dy: (c.dy || 0) + (e.key === 'ArrowUp' ? -st : e.key === 'ArrowDown' ? st : 0) || null }); render(); e.preventDefault(); }
+      return;
+    }
+    if (!E?.sel) return;
     const l = E.layers.find((x) => x.id === E.sel); if (!l) return;
-    if (e.key === 'Delete' || e.key === 'Backspace') { E.layers = E.layers.filter((x) => x !== l); E.sel = null; render(); props(); layerList(); e.preventDefault(); }
+    if (e.key.startsWith('Arrow')) save(true);
+    if (e.key === 'Delete' || e.key === 'Backspace') { save(); E.layers = E.layers.filter((x) => x !== l); E.sel = null; render(); props(); layerList(); e.preventDefault(); }
     const st = e.shiftKey ? 0.02 : 0.004;
     if (e.key === 'ArrowLeft') l.x -= st; if (e.key === 'ArrowRight') l.x += st; if (e.key === 'ArrowUp') l.y -= st; if (e.key === 'ArrowDown') l.y += st;
     if (e.key.startsWith('Arrow')) { e.preventDefault(); render(); }
   });
   addEventListener('resize', () => { if (dlg.open) render(); });
-  $('#ed-done').onclick = () => { const f = E.onDone; dlg.close(); f?.(E.layers); };
+  $('#ed-done').onclick = () => { const f = E.onDone; dlg.close(); f?.({ layers: E.layers, els: E.els }); };
   $('#ed-cancel').onclick = () => dlg.close();
 }

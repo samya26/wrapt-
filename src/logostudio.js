@@ -72,6 +72,7 @@ async function makeOptions() {
   showResults();
   $('#ls-grid').innerHTML = Array.from({ length: 6 }, () => '<div class="ls-card skel"><i></i></div>').join('');
   $('#ls-res-note').textContent = 'Designing…'; $('#ls-tweak').innerHTML = '';
+  lsSave();
   S.seed = Math.floor(Math.random() * 1e9); // new ideas every time
   await loadGenFonts();
   const c = ctx();
@@ -138,7 +139,21 @@ function renderTweak() {
     <div class="lt-dl">Download <button type="button" data-lsdl="png">PNG</button><button type="button" data-lsdl="svg">SVG</button><button type="button" data-lsdl="mono">Black</button></div>`;
   repaintSel();
 }
+// ---------- undo / redo for logo edits ----------
+const H = { past: [], future: [] }; let lastL = 0;
+function lsSave(merge = false) {
+  if (!S.options?.length) return;
+  const now = Date.now(); if (merge && now - lastL < 800) { lastL = now; return; } lastL = now;
+  H.past.push({ options: [...S.options], sel: S.sel }); if (H.past.length > 60) H.past.shift(); H.future = []; lsUpd();
+}
+function lsStep(dir) {
+  const from = dir < 0 ? H.past : H.future, to = dir < 0 ? H.future : H.past; if (!from.length) return;
+  to.push({ options: [...S.options], sel: S.sel }); const st = from.pop(); S.options = st.options; S.sel = st.sel; lastL = 0;
+  renderGrid(); renderTweak(); lsUpd();
+}
+function lsUpd() { const u = $('#ls-undo'), r = $('#ls-redo'); if (u) u.disabled = !H.past.length; if (r) r.disabled = !H.future.length; }
 function tweak(t, v) {
+  lsSave(['tracking', 'primary', 'secondary'].includes(t));
   const o = { ...S.options[S.sel], mark: { ...(S.options[S.sel].mark || {}) }, colors: { ...S.options[S.sel].colors } };
   if (t === 'font') { o.font = v; if (FONTS[v]?.w != null) o.weight = 'regular'; loadFonts(v).then(() => { repaintSel(); }); }
   else if (t === 'layout') o.layout = v;
@@ -173,7 +188,8 @@ async function download(kind) {
 }
 
 // ---------- open / wire ----------
-export function openLogoStudio({ name = '', brief = '', colors = [], vibes = [], spec = null, onUse, onSkip, ai } = {}) {
+export function openLogoStudio(a = {}) { H.past = []; H.future = []; lsUpd(); return openLS(a); }
+function openLS({ name = '', brief = '', colors = [], vibes = [], spec = null, onUse, onSkip, ai } = {}) {
   if (ai) isAI = ai;
   Object.assign(S, { name, brief, colors: colors.slice(0, 2), onUse, onSkip, used: false });
   if (vibes.length) S.prefs = vibesToPrefs(vibes);
@@ -200,6 +216,7 @@ export function initLogoStudio() {
     if (d.tool) { pad.tool = d.tool; $$('.ls-tools [data-pen], .ls-tools [data-tool]').forEach((x) => x.classList.toggle('on', x === b)); }
     if (d.sact === 'mirror') { pad.mirror = !pad.mirror; b.classList.toggle('on', pad.mirror); pad.draw(); }
     if (d.sact === 'undo') pad.undo();
+    if (d.sact === 'redo') pad.redo();
     if (d.sact === 'clear') pad.clear();
     if (d.smode) { S.sketchMode = d.smode; $$('[data-smode]').forEach((x) => x.classList.toggle('on', x === b)); }
     if (d.opt != null) { S.sel = +d.opt; $$('#ls-grid .ls-card').forEach((x) => x.classList.toggle('on', x === b)); renderTweak(); if (matchMedia('(max-width: 860px)').matches) $('#ls-tweak').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -222,9 +239,14 @@ export function initLogoStudio() {
   });
   $('#ls-go').onclick = () => { S.name = $('#ls-name').value.trim(); makeOptions(); };
   $('#ls-regen').onclick = () => makeOptions();
+  $('#ls-undo').onclick = () => lsStep(-1); $('#ls-redo').onclick = () => lsStep(1);
+  addEventListener('keydown', (e) => {
+    if (!dlg.open || !(e.ctrlKey || e.metaKey) || /input|textarea|select/i.test(document.activeElement?.tagName)) return;
+    const k = e.key.toLowerCase(); if (k === 'z') { e.preventDefault(); lsStep(e.shiftKey ? 1 : -1); } else if (k === 'y') { e.preventDefault(); lsStep(1); }
+  });
   $('#ls-back').onclick = () => { $('#ls-results').hidden = true; $('#ls-make').hidden = false; $('#ls-tabs').style.visibility = 'visible'; renderMake(); };
   $('#ls-more').onclick = async () => {
-    const base = S.options[S.sel]; if (!base) return;
+    const base = S.options[S.sel]; if (!base) return; lsSave();
     const v = variations(base); await loadFonts(...v.map((x) => x.font));
     S.options = [base, ...v, ...S.options.filter((o, i) => i !== S.sel).slice(0, 1)]; S.sel = 0;
     $('#ls-res-note').textContent = ''; renderGrid(); renderTweak();

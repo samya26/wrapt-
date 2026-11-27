@@ -43,7 +43,7 @@ import { openLogoStudio, initLogoStudio } from './logostudio.js';
 import { initLanding } from './landing.js';
 import { openEditor, initEditor } from './editor.js';
 import { loadGenFonts } from './genmark.js';
-import { designLocally, refineLocally, normalizePlan, audit, askAI, allowedPacks, STYLE_NAMES } from './design.js';
+import { designLocally, refineLocally, normalizePlan, audit, askAI, allowedPacks, STYLE_NAMES, diversify } from './design.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -87,7 +87,8 @@ function redo() { if (!history.future.length) return; history.past.push(current)
 function updUndo() { $('#undo').disabled = !history.past.length; $('#redo').disabled = !history.future.length; }
 $('#undo').onclick = undo; $('#redo').onclick = redo;
 addEventListener('keydown', (e) => {
-  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || /INPUT|TEXTAREA/.test(document.activeElement?.tagName)) return;
+  if (!(e.ctrlKey || e.metaKey) || !['z', 'y'].includes(e.key.toLowerCase()) || /INPUT|TEXTAREA/.test(document.activeElement?.tagName) || document.querySelector('dialog[open]')) return;
+  if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
   e.preventDefault(); e.shiftKey ? redo() : undo();
 });
 
@@ -105,9 +106,9 @@ function refreshLogo() {
 // the designed logo, re-coloured so it always reads on this pack
 // the same logo, re-coloured for whatever it sits on (oval labels, panels)
 function logoOnFor(b) {
-  return (bg) => { if (b.logoSource !== 'spec' || !b.logoSpec) return null; const sp = { ...b.logoSpec, name: b.name || b.logoSpec.name }; return renderLogo(sp, packColors(sp, bg, b.accent, isDark(bg) ? '#fbf7ef' : '#1c1a17')).canvas; };
+  return (bg) => { if (b.logoSource !== 'spec' || !b.logoSpec) return null; const sp = { ...b.logoSpec, name: b.name || b.logoSpec.name, ...(state.logoLocked ? {} : { colors: { primary: isDark(bg) ? '#fbf7ef' : (luminance(b.pack) < 0.35 ? b.pack : b.accent), secondary: b.accent } }) }; return renderLogo(sp, packColors(sp, bg, b.accent, isDark(bg) ? '#fbf7ef' : '#1c1a17')).canvas; };
 }
-function specLogo(b) { b.logoOn = logoOnFor(b); const sp = { ...b.logoSpec, name: b.name || b.logoSpec.name }; return renderLogo(sp, packColors(sp, paper(b), b.accent, ink(b))).canvas; }
+function specLogo(b) { b.logoOn = logoOnFor(b); const sp = { ...b.logoSpec, name: b.name || b.logoSpec.name, ...(state.logoLocked ? {} : { colors: { primary: ink(b), secondary: b.accent } }) }; return renderLogo(sp, packColors(sp, paper(b), b.accent, ink(b))).canvas; }
 // a clean name-only logo when nobody designed one yet (used for all concepts, so the brand stays consistent)
 const STYLE_PREFS = { classic: { modern: -0.5, serious: 0.5, bold: 0 }, minimal: { modern: 0.6, serious: 0.4, bold: -0.3, precise: 0.6 }, bold: { modern: 0.4, serious: -0.5, bold: 0.8 }, poster: { modern: 0.4, serious: -0.4, bold: 0.7 }, label: { modern: -0.4, serious: 0, bold: 0.3 }, monogram: { modern: 0, serious: 0.5, bold: 0, precise: 0.5 }, editorial: { modern: 0.3, serious: 0.6, bold: 0.5 }, heritage: { modern: -0.7, serious: 0, bold: 0.4, precise: -0.3 } };
 function autoSpec(p) {
@@ -159,7 +160,7 @@ function planFromState() {
 function brandFromPlan(p, keepUploaded) {
   const b = { ...state.brand, fonts: { ...p.fonts }, pattern: { ...p.pattern, image: null }, border: { ...state.brand.border, type: borderType(p.border.type), image: null },
     name: p.name, tagline: p.tagline, detail: p.detail, pack: p.palette.pack, accent: p.palette.accent, ink: null, style: p.style, centre: p.centre || 'none',
-    logoSpec: state.brand.logoSpec || autoSpec(p), logoScale: p.logoScale ?? 1, logoY: 0, logoPlate: false, artwork: null, layers: state.brand.layers || [] };
+    logoSpec: state.brand.logoSpec || autoSpec(p), logoScale: p.logoScale ?? 1, logoY: 0, logoPlate: false, artwork: null, layers: state.brand.layers || [], els: {} };
   if (keepUploaded && state.brand.uploadedLogo) { b.logo = state.brand.uploadedLogo; b.logoSource = 'upload'; b.logoHasName = false; }
   else { b.logoSource = 'spec'; b.logo = specLogo(b); b.logoHasName = true; }
   return b;
@@ -227,18 +228,12 @@ async function generate(opts = {}) {
   }
   const local = designLocally(brief, { refColors: colors.length ? [colors[0], colors[1] || mix(colors[0], isDark(colors[0]) ? '#f3d9a4' : '#2a1d16', 0.6)] : state.refs[0]?.colors || [], hasLogo });
   if (!plans) plans = local;
-  // always 6 directions, each a different layout (pad AI results with the built-in ones)
-  {
-    const seen = new Set(), out = [];
-    for (const p of [...plans, ...local]) { if (out.length >= 6) break; if (seen.has(p.style)) continue; seen.add(p.style); out.push(p); }
-    for (const st of ['classic', 'poster', 'label', 'monogram', 'editorial', 'minimal', 'heritage']) { if (out.length >= 6) break; if (!seen.has(st)) { seen.add(st); out.push({ ...out[out.length % Math.max(1, out.length)], style: st, concept: STYLE_NAMES[st] }); } }
-    plans = out;
-  }
-  // hard choices from the start screen always win
+  // 6 directions that genuinely differ: layout, colours, type, border, pattern, finish
+  plans = diversify([...plans, ...local], brief);
+  // every concept on the same pack, so you compare designs, not shapes
   const fits = allowedPacks(brief), named = /\b(can|box|tub|jar|pouch|bottle|tube|cup|card|bag)s?\b|paper tube|hang card/i.test(brief);
-  const same = plans.every((p) => p.product === plans[0].product);
-  plans = plans.map((p, i) => normalizePlan({ ...p, ...(opts.name ? { name: opts.name } : {}),
-    product: opts.product || (named ? p.product : fits.includes(p.product) && !(same && i > 0) ? p.product : fits[i % Math.min(3, fits.length)]) }, { hasLogo }));
+  const pack = opts.product || (named || fits.includes(plans[0].product) ? plans[0].product : fits[0]);
+  plans = plans.map((p) => normalizePlan({ ...p, ...(opts.name ? { name: opts.name } : {}), product: pack }, { hasLogo }));
   // one logo for all three concepts: the locked one, or a clean wordmark
   if (!locked && !hasLogo) state.brand.logoSpec = autoSpec(plans[0]);
   state.concepts = plans;
@@ -356,7 +351,7 @@ function faceInfo() {
 }
 $('#edit-art').onclick = () => {
   const f = faceInfo();
-  openEditor({ brand: state.brand, ...f, onDone: (layers) => { state.brand.layers = layers; syncInputs(); rebuild(true); toast(layers.length ? 'Artwork applied to the pack' : 'Artwork cleared'); } });
+  openEditor({ brand: state.brand, ...f, onDone: ({ layers, els }) => { state.brand = { ...state.brand, layers, els }; syncInputs(); rebuild(true); toast('Changes applied to the pack'); } });
 };
 
 // ---------- inputs ----------

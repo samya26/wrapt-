@@ -360,7 +360,7 @@
       <header class="ed-head">
         <b>Edit artwork</b>
         <div class="seg" id="ed-faces"><button type="button" data-edface="front" class="on">Front</button><button type="button" data-edface="back">Back</button></div>
-        <div class="ed-hacts"><button type="button" class="ghost" id="ed-cancel">Cancel</button><button type="button" class="primary" id="ed-done">Done<span class="hide-m"> — apply to pack</span></button></div>
+        <div class="ed-hacts"><button type="button" class="icon-btn" id="ed-undo" title="Undo (Ctrl+Z)" disabled>↶</button><button type="button" class="icon-btn" id="ed-redo" title="Redo (Ctrl+Shift+Z)" disabled>↷</button><button type="button" class="ghost" id="ed-cancel">Cancel</button><button type="button" class="primary" id="ed-done">Done<span class="hide-m"> — apply to pack</span></button></div>
       </header>
       <aside class="ed-tools">
         <h4>Text</h4>
@@ -374,7 +374,7 @@
       </aside>
       <main id="ed-stage">
         <canvas id="ed-canvas"></canvas>
-        <div id="ed-over"><div id="ed-safe" hidden><span>visible from the front</span></div><div id="ed-sel" hidden><i data-h="tl"></i><i data-h="tr"></i><i data-h="bl"></i><i data-h="br"></i><i data-h="rot" class="rot"></i></div></div>
+        <div id="ed-over"><canvas id="ed-hl"></canvas><div id="ed-safe" hidden><span>visible from the front</span></div><div id="ed-sel" hidden><i data-h="tl"></i><i data-h="tr"></i><i data-h="bl"></i><i data-h="br"></i><i data-h="rot" class="rot"></i></div></div>
       </main>
       <aside class="ed-side">
         <h4>Selected</h4><div id="ed-props"></div>
@@ -418,7 +418,7 @@
                   <button type="button" data-tool="heart" title="Heart"><svg viewBox="0 0 24 24"><path d="M12 20s-8-5-8-11a4.5 4.5 0 0 1 8-2.6A4.5 4.5 0 0 1 20 9c0 6-8 11-8 11z"/></svg></button>
                   <button type="button" data-tool="star" title="Star"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg></button>
                 </div>
-                <div class="tgrp"><button type="button" data-tool="eraser" title="Eraser — touch a line">⌫</button><button type="button" data-sact="mirror" title="Mirror both sides">◧</button><button type="button" data-sact="undo" title="Undo">↶</button><button type="button" data-sact="clear" title="Clear">✕</button></div>
+                <div class="tgrp"><button type="button" data-tool="eraser" title="Eraser — touch a line">⌫</button><button type="button" data-sact="mirror" title="Mirror both sides">◧</button><button type="button" data-sact="undo" title="Undo">↶</button><button type="button" data-sact="redo" title="Redo">↷</button><button type="button" data-sact="clear" title="Clear">✕</button></div>
               </div>
             </div>
             <div class="ls-drawside">
@@ -432,7 +432,7 @@
       <section id="ls-results" hidden>
         <div class="ls-body">
           <div class="ls-left">
-            <div class="ls-res-head"><button type="button" class="link" id="ls-back">← Back</button><span id="ls-res-note"></span><button type="button" class="link" id="ls-regen">↻ New ideas</button></div>
+            <div class="ls-res-head"><button type="button" class="link" id="ls-back">← Back</button><span id="ls-res-note"></span><span class="ls-ur"><button type="button" class="icon-btn" id="ls-undo" title="Undo (Ctrl+Z)" disabled>↶</button><button type="button" class="icon-btn" id="ls-redo" title="Redo" disabled>↷</button></span><button type="button" class="link" id="ls-regen">↻ New ideas</button></div>
             <div class="ls-grid" id="ls-grid"></div>
           </div>
           <div class="ls-tweak" id="ls-tweak"></div>

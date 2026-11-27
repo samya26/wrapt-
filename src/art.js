@@ -119,14 +119,67 @@ export function loadImage(src) {
 // ---------- text helpers ----------
 function text(g, str, x, y, size, color, { font = 'Inter', weight = 600, align = 'center', spacing = 0, italic = false, maxW = Infinity } = {}) {
   if (!str) return;
-  g.save();
+  g = g.__raw || g;
+  let id = null, e = null;
+  if (CUR) {
+    id = nextId(`text-${CUR.style}`); e = edit(id);
+    if (e?.hide) { rec({ id, kind: 'text', label: String(e.text ?? str), hidden: true }); return; }
+    if (e?.text != null) str = e.text; if (e?.color) color = e.color; if (e?.scale) { size *= e.scale; maxW *= e.scale; }
+    if (!str) return;
+  }
+  g.save(); shifted(g, e);
   g.fillStyle = color; g.textAlign = align; g.textBaseline = 'middle';
   let s = size;
   const set = () => { g.font = fontCss(font, weight, s, italic); if ('letterSpacing' in g) g.letterSpacing = `${spacing * (s / size)}px`; };
   set();
   while (g.measureText(str).width > maxW && s > size * 0.45) { s *= 0.93; set(); } // shrink to fit
   g.fillText(str, x, y);
+  if (id) { const wd = g.measureText(str).width, hh = s * 1.25, p = new Path2D(); p.rect(x - (g.textAlign === 'center' ? wd / 2 : g.textAlign === 'right' ? wd : 0), y - hh / 2, wd, hh); rec({ id, kind: 'text', label: str, text: str, path: p, m: g.getTransform(), op: 'fill' }); }
   g.restore();
+}
+
+// ---------- every piece of the design is its own editable element ----------
+// While a panel paints, each line, shape, text and the logo gets a stable id (side:part:n).
+// b.els[id] can hide it, move it (dx, dy as fractions of the panel), recolour or resize it.
+let CUR = null, RECORD = null;
+export function withRecording(fn) { RECORD = []; let out; try { out = fn(); } finally { var r = RECORD; RECORD = null; } return [out, r]; }
+function nextId(part) { const n = (CUR.n[part] = (CUR.n[part] ?? -1) + 1); return `${CUR.role}:${part}:${n}`; }
+function edit(id) { return CUR?.b.els?.[id]; }
+function rec(o) { if (RECORD && CUR) RECORD.push(o); }
+function shifted(t, e) { if (!e || (!e.dx && !e.dy)) return; const m = t.getTransform(); t.setTransform(new DOMMatrix().translateSelf((e.dx || 0) * CUR.w, (e.dy || 0) * CUR.h).multiplySelf(m)); }
+const PATH_OPS = new Set(['moveTo', 'lineTo', 'arc', 'arcTo', 'rect', 'roundRect', 'ellipse', 'quadraticCurveTo', 'bezierCurveTo', 'closePath']);
+const PART_LABEL = { border: 'Border line', centre: 'Centre shape', deco: 'Shape' };
+function track(g, part, group = false) {
+  const t = g.__raw || g; if (!CUR) return t;
+  let path = new Path2D(), gid = null;
+  const label = PART_LABEL[part.split('-')[0]] || 'Shape';
+  const id = () => (group ? (gid ??= nextId(part)) : nextId(part));
+  const draw = (op, p, args) => {
+    const i = id(), e = edit(i);
+    if (e?.hide) { if (!RECORD?.some((r) => r.id === i)) rec({ id: i, kind: op, label, hidden: true }); return; }
+    const touched = e && (e.dx || e.dy || e.color || e.width);
+    if (touched) { t.save(); shifted(t, e); if (e.color) { t.fillStyle = e.color; t.strokeStyle = e.color; } if (e.width) t.lineWidth *= e.width; }
+    t[op](p, ...args);
+    rec({ id: i, kind: op, label, path: p, m: t.getTransform(), op, lw: t.lineWidth });
+    if (touched) t.restore();
+  };
+  return new Proxy(t, {
+    get(o, k) {
+      if (k === '__raw') return t;
+      if (k === 'beginPath') return () => { path = new Path2D(); t.beginPath(); };
+      if (PATH_OPS.has(k)) return (...a) => { path[k](...a); t[k](...a); };
+      if (k === 'stroke' || k === 'fill') return (...a) => { const p = a[0] instanceof Path2D ? a.shift() : path; draw(k, p, a); };
+      if (k === 'strokeRect' || k === 'fillRect') return (x, y, w, h) => { const p = new Path2D(); p.rect(x, y, w, h); draw(k === 'strokeRect' ? 'stroke' : 'fill', p, []); };
+      if (k === 'fillText') return (str, x, y) => {
+        const i = id(), e = edit(i); if (e?.hide) { rec({ id: i, kind: 'text', label: 'Big type', hidden: true }); return; }
+        t.save(); shifted(t, e); if (e?.color) t.fillStyle = e.color; t.fillText(str, x, y);
+        const wd = t.measureText(str).width, p = new Path2D(); p.rect(x - wd / 2, y - wd * 0.2, wd, wd * 0.4);
+        rec({ id: i, kind: 'fill', label: 'Big type', path: p, m: t.getTransform(), op: 'fill' }); t.restore();
+      };
+      const v = o[k]; return typeof v === 'function' ? v.bind(o) : v;
+    },
+    set(o, k, v) { o[k] = v; return true; },
+  });
 }
 // ---------- patterns (procedural tiles) ----------
 export const PATTERNS = {
@@ -385,7 +438,7 @@ function paintCentre(g, x, y, w, h, b, s) {
   g.save(); g.fillStyle = tint; g.strokeStyle = lineC; g.lineWidth = Math.max(1, s * 0.004);
   if (t === 'spotlight') { g.beginPath(); g.arc(cx, cy, s * 0.37, 0, Math.PI * 2); g.fill(); }
   else if (t === 'frame') {
-    const fw = Math.min(w * 0.74 * wk, s * 0.9), fh = h * 0.62;
+    const fw = Math.min(w * 0.74 * wk, s * 0.9), fh = h * 0.56;
     g.fillStyle = dark ? mix(pap, '#ffffff', 0.1) : mix(pap, '#ffffff', 0.6);
     g.beginPath(); g.roundRect(cx - fw / 2, cy - fh * 0.42, fw, fh, s * 0.05); g.fill(); g.stroke();
   } else if (t === 'arch') {
@@ -435,6 +488,12 @@ const accentOn = (b) => readable(b.accent, paper(b), 2.2);
 
 function drawLogo(g, b, cx, cy, size, bg) {
   const logo = (bg && b.logoOn?.(bg)) || b.logo; if (!logo) return;
+  g = g.__raw || g;
+  let id = null, e = null;
+  if (CUR) { id = nextId('logo'); e = edit(id); if (e?.hide) { rec({ id, kind: 'logo', label: 'Logo', hidden: true }); return; } if (e?.scale) size *= e.scale; }
+  if (e?.dx || e?.dy) { g.save(); shifted(g, e); drawLogoAt(g, b, logo, cx, cy, size, id); g.restore(); } else drawLogoAt(g, b, logo, cx, cy, size, id);
+}
+function drawLogoAt(g, b, logo, cx, cy, size, id) {
   size *= b.logoScale ?? 1;
   if (b.logoPlate) {
     const plate = isDark(paper(b)) ? '#fbf6ee' : '#1c1a17';
@@ -444,15 +503,18 @@ function drawLogo(g, b, cx, cy, size, bg) {
   }
   const k = size / Math.max(logo.width, logo.height);
   g.drawImage(logo, cx - (logo.width * k) / 2, cy - (logo.height * k) / 2, logo.width * k, logo.height * k);
+  if (id) { const p = new Path2D(); p.rect(cx - (logo.width * k) / 2, cy - (logo.height * k) / 2, logo.width * k, logo.height * k); rec({ id, kind: 'logo', label: 'Logo', path: p, m: g.getTransform(), op: 'fill' }); }
 }
 
-function paintPanel(g, x, y, w, h, role, b) {
+function paintPanel(g0, x, y, w, h, role, b) {
+  const prevCur = CUR; CUR = { role, b, n: {}, w, h, style: b.style };
   const s = Math.min(w, h), ts = b.textScale ?? 1;
   const disp = b.fonts?.display || 'Instrument Serif', body = b.fonts?.body || 'Inter';
-  g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
-  g.fillStyle = paper(b); g.fillRect(x, y, w, h);
-  paintPattern(g, x, y, w, h, b, s);
-  if (role === 'front') paintCentre(g, x, y, w, h, b, s);
+  g0.save(); g0.beginPath(); g0.rect(x, y, w, h); g0.clip();
+  g0.fillStyle = paper(b); g0.fillRect(x, y, w, h);
+  { const pid = `${role}:pattern:0`, hid = b.els?.[pid]?.hide; if (b.pattern?.type && b.pattern.type !== 'none') rec({ id: pid, kind: 'pattern', label: 'Background pattern', hidden: !!hid, noHit: true }); if (!hid) paintPattern(g0, x, y, w, h, b, s); }
+  if (role === 'front') paintCentre(track(g0, `centre-${b.centre || 'none'}`, ['sunburst', 'halftone'].includes(b.centre)), x, y, w, h, b, s);
+  const g = track(g0, `deco-${b.style}`);
   const wk = b._wrapK || 1; // on round packs only ~2/3 of the front is visible, so text stays inside that
   const cx = x + w / 2, cy = y + h / 2, fg = ink(b), ac = accentOn(b);
   const ly = (b.logoY ?? 0) * h;
@@ -493,8 +555,10 @@ function paintPanel(g, x, y, w, h, role, b) {
     else drawLogo(g, b, cx, cy, s * 0.6);
   } else if (st === 'monogram') {
     // their own logo, tiny and repeated: a signature pattern no other brand has
-    if (b.logo) {
-      const t = s * 0.13, lg = b.logo, k = t / Math.max(lg.width, lg.height);
+    const mid = `${role}:monopattern:0`, mhid = b.els?.[mid]?.hide;
+    if (b.logo) rec({ id: mid, kind: 'pattern', label: 'Logo pattern', hidden: !!mhid, noHit: true });
+    if (b.logo && !mhid) {
+      const t = s * 0.13, lg = b.logo, k = t / Math.max(lg.width, lg.height), g = g0;
       g.save(); g.globalAlpha = isDark(paper(b)) ? 0.16 : 0.13; g.translate(cx, cy); g.rotate(-0.2);
       const R = Math.hypot(w, h);
       for (let yy = -R, r = 0; yy < R; yy += t * 1.25, r++) for (let xx = -R + (r % 2) * t * 0.7; xx < R; xx += t * 1.4) g.drawImage(lg, xx, yy, lg.width * k, lg.height * k);
@@ -564,9 +628,10 @@ function paintPanel(g, x, y, w, h, role, b) {
     } else if (role === 'side') side(b.name.toUpperCase(), Math.min(w * 0.3, h * 0.08) * ts, ac, { font: disp, spacing: 6 });
     else drawLogo(g, b, cx, cy, s * 0.62);
   }
-  if (role !== 'top') paintBorder(g, x, y, w, h, b, s);
-  drawLayers(g, x, y, w, h, role, b);
-  g.restore();
+  if (role !== 'top') paintBorder(track(g0, `border-${b.border?.type === 'image' ? 'image' : borderType(b.border?.type)}`, b.border?.type === 'image'), x, y, w, h, b, s);
+  drawLayers(g0, x, y, w, h, role, b);
+  g0.restore();
+  CUR = prevCur;
 }
 
 // ---------- your own layers (text, paragraphs, shapes, icons, images) from the artwork editor ----------

@@ -20,7 +20,7 @@ export class SketchPad {
   down(e) {
     e.preventDefault(); this.c.setPointerCapture?.(e.pointerId);
     const p = this.pt(e);
-    if (this.tool === 'eraser') { this.erasing = true; this.eraseAt(p); return; }
+    if (this.tool === 'eraser') { this.snap(); this.erasing = true; this.eraseAt(p); return; }
     if (SHAPES[this.tool]) { this.shapeStart = p; this.cur = { pts: SHAPES[this.tool](p, p), w: this.pen }; this.draw(); return; }
     this.cur = { pts: [p], w: this.pen }; this.draw();
   }
@@ -38,15 +38,17 @@ export class SketchPad {
     const s = this.cur; this.cur = null; const wasShape = !!this.shapeStart; this.shapeStart = null;
     if (wasShape && Math.hypot(s.pts[0].x - s.pts[Math.floor(s.pts.length / 2)].x, s.pts[0].y - s.pts[Math.floor(s.pts.length / 2)].y) < 0.02) { this.draw(); return; } // a tap, not a drag
     const act = [s]; if (this.mirror) act.push({ pts: s.pts.map((p) => ({ x: 1 - p.x, y: p.y })), w: s.w });
-    this.actions.push(act); this.draw(); this.onChange();
+    this.snap(); this.actions.push(act); this.draw(); this.onChange();
   }
   eraseAt(p) {
     const r = 0.03, before = this.actions.length;
     this.actions = this.actions.map((a) => a.filter((s) => !s.pts.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < r + s.w))).filter((a) => a.length);
     if (this.actions.length !== before || true) { this.draw(); this.onChange(); }
   }
-  undo() { this.actions.pop(); this.draw(); this.onChange(); }
-  clear() { this.actions = []; this.draw(); this.onChange(); }
+  snap() { (this.past ||= []).push(this.actions.slice()); this.future = []; }
+  undo() { if (!this.past?.length) return; (this.future ||= []).push(this.actions.slice()); this.actions = this.past.pop(); this.draw(); this.onChange(); }
+  redo() { if (!this.future?.length) return; this.past.push(this.actions.slice()); this.actions = this.future.pop(); this.draw(); this.onChange(); }
+  clear() { if (!this.actions.length) return; this.snap(); this.actions = []; this.draw(); this.onChange(); }
   draw() {
     const g = this.g, W = this.c.width;
     g.clearRect(0, 0, W, W);
