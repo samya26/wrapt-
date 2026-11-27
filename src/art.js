@@ -507,7 +507,61 @@ function paintPanel(g, x, y, w, h, role, b) {
     else drawLogo(g, b, cx, cy, s * 0.62);
   }
   if (role !== 'top') paintBorder(g, x, y, w, h, b, s);
+  drawLayers(g, x, y, w, h, role, b);
   g.restore();
+}
+
+// ---------- your own layers (text, paragraphs, shapes, icons, images) from the artwork editor ----------
+// Every layer lives on one face; x, y (centre), w and h are fractions of that face, so it fits any size.
+export const SHAPE_PATHS = {
+  star: (w, h) => { let d = ''; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5, r = i % 2 ? 0.42 : 1; d += `${i ? 'L' : 'M'}${(Math.cos(a) * r * w) / 2} ${(Math.sin(a) * r * h) / 2}`; } return d + 'Z'; },
+  heart: (w, h) => { let d = ''; for (let i = 0; i <= 64; i++) { const t = (i / 64) * Math.PI * 2, x = 16 * Math.sin(t) ** 3, y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)); d += `${i ? 'L' : 'M'}${(x / 34) * w} ${(y / 32) * h + h * 0.06}`; } return d + 'Z'; },
+  badge: (w, h) => { let d = ''; const n = 24; for (let i = 0; i <= n * 2; i++) { const a = (i / (n * 2)) * Math.PI * 2, r = i % 2 ? 0.9 : 1; d += `${i ? 'L' : 'M'}${(Math.cos(a) * r * w) / 2} ${(Math.sin(a) * r * h) / 2}`; } return d + 'Z'; },
+  arrow: (w, h) => `M${-w / 2} ${-h * 0.15}H${w * 0.15}V${-h / 2}L${w / 2} 0L${w * 0.15} ${h / 2}V${h * 0.15}H${-w / 2}Z`,
+  ribbon: (w, h) => `M${-w / 2} ${-h / 2}H${w / 2}L${w * 0.42} 0L${w / 2} ${h / 2}H${-w / 2}L${-w * 0.42} 0Z`,
+};
+export function wrapLines(g, text, maxW) {
+  const out = [];
+  for (const para of String(text).split('\n')) {
+    let line = '';
+    for (const word of para.split(/\s+/)) { const t = line ? `${line} ${word}` : word; if (g.measureText(t).width > maxW && line) { out.push(line); line = word; } else line = t; }
+    out.push(line);
+  }
+  return out;
+}
+export function drawLayers(g, x, y, w, h, role, b) {
+  const layers = (b.layers || []).filter((l) => (l.face || 'front') === role && !l.hidden);
+  for (const l of layers) {
+    const cx = x + l.x * w, cy = y + l.y * h, lw = l.w * w, lh = (l.h ?? 0.1) * h;
+    g.save(); g.translate(cx, cy); if (l.rot) g.rotate((l.rot * Math.PI) / 180); g.globalAlpha = l.opacity ?? 1;
+    if (l.type === 'text') {
+      const size = (l.size ?? 0.05) * h; g.font = fontCss(l.font || b.fonts?.body || 'Inter', l.weight || 400, size, l.italic);
+      if ('letterSpacing' in g) g.letterSpacing = `${(l.spacing || 0) * size}px`;
+      g.fillStyle = l.color || ink(b); g.textBaseline = 'middle'; g.textAlign = l.align || 'center';
+      const lines = l.upper ? wrapLines(g, String(l.text || '').toUpperCase(), lw) : wrapLines(g, l.text || '', lw), lead = size * (l.lead ?? 1.25);
+      const ax = l.align === 'left' ? -lw / 2 : l.align === 'right' ? lw / 2 : 0;
+      lines.forEach((ln, i) => g.fillText(ln, ax, (i - (lines.length - 1) / 2) * lead));
+    } else if (l.type === 'image' && l.img) {
+      const k = Math.min(lw / l.img.width, lh / l.img.height), iw = l.img.width * k, ih = l.img.height * k;
+      if (l.round) { g.beginPath(); g.roundRect(-iw / 2, -ih / 2, iw, ih, Math.min(iw, ih) * 0.12); g.clip(); }
+      g.drawImage(l.img, -iw / 2, -ih / 2, iw, ih);
+    } else if (l.type === 'icon' && l.d) {
+      const k = Math.min(lw, lh) / 24; g.scale(k, k); g.translate(-12, -12);
+      g.strokeStyle = l.color || ink(b); g.lineWidth = (l.sw ?? 1.8); g.lineCap = g.lineJoin = 'round'; g.stroke(new Path2D(l.d));
+    } else if (l.type === 'shape') {
+      g.fillStyle = l.fill || b.accent; g.strokeStyle = l.stroke || ink(b); g.lineWidth = (l.sw ?? 0) * Math.min(w, h) * 0.01;
+      const sh = l.shape || 'rect';
+      let p;
+      if (sh === 'rect') { p = new Path2D(); p.rect(-lw / 2, -lh / 2, lw, lh); }
+      else if (sh === 'round') { p = new Path2D(); p.roundRect(-lw / 2, -lh / 2, lw, lh, Math.min(lw, lh) * 0.25); }
+      else if (sh === 'circle') { p = new Path2D(); p.ellipse(0, 0, lw / 2, lh / 2, 0, 0, Math.PI * 2); }
+      else if (sh === 'line') { g.strokeStyle = l.fill || ink(b); g.lineWidth = Math.max(1, lh); g.beginPath(); g.moveTo(-lw / 2, 0); g.lineTo(lw / 2, 0); g.stroke(); g.restore(); continue; }
+      else p = new Path2D(SHAPE_PATHS[sh]?.(lw, lh) || '');
+      if (l.fill !== 'none') g.fill(p);
+      if (l.sw) g.stroke(p);
+    }
+    g.restore();
+  }
 }
 
 // Wrap-around label (can, tub, jar): front in the middle, back split across the seam.

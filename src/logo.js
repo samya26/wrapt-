@@ -3,6 +3,7 @@
 // The AI or the built-in designer only writes specs; this file draws them as crisp vectors —
 // to a canvas for the 3D packaging, and to SVG for download. The AI never draws pixels.
 import { contrast, mix, autoInk, isDark, readable, fontCss, fontWeight, FONTS } from './art.js';
+import { drawGen, genMarks, genReady, hash } from './genmark.js';
 
 // ---------- glyphs: 24×24 line drawings, round caps, 2px grid ----------
 export const GLYPHS = {
@@ -85,7 +86,7 @@ export const LAYOUTS = { wordmark: 'Wordmark', stacked: 'Stacked', 'mark-left': 
 export const TREATMENTS = { none: 'Plain', swash: 'Swash underline', dot: 'Full stop', split: 'Two-colour', shadow: 'Retro shadow', cut: 'Sliced', outline: 'Outline', swap: 'Symbol as a letter' };
 export const CONTAINERS = { none: 'None', circle: 'Circle', square: 'Rounded square', arch: 'Arch', shield: 'Shield', blob: 'Organic', pill: 'Pill' };
 export const LOGO_FONTS = Object.keys(FONTS).filter((f) => !['Tiro Devanagari Hindi', 'Mukta'].includes(f));
-const TYPE_LED = (s) => ['wordmark', 'stacked', 'lettermark'].includes(s.layout) || s.treatment !== 'none';
+const TYPE_LED = (s) => ['wordmark', 'stacked', 'lettermark'].includes(s.layout) || s.treatment !== 'none' || s.mark?.source === 'gen';
 const hasDeva = (s) => /[ऀ-ॿ]/.test(s);
 
 // ---------- scene: one list of shapes that renders to canvas AND to SVG ----------
@@ -168,8 +169,9 @@ export function smoothClosed(p) { // Catmull-Rom → Bézier, closed
 const onColor = (fill, pref) => (pref && contrast(pref, fill) >= 3 ? pref : isDark(fill) || autoInk(fill) !== '#1c1a17' ? '#fbf7ef' : '#1c1a17');
 
 // the symbol, centred at cx,cy, `size` wide
-function drawMark(sc, spec, cx, cy, size, color, { erase = false, boldK = 1 } = {}) {
+function drawMark(sc, spec, cx, cy, size, color, { erase = false, boldK = 1, c2 } = {}) {
   const m = spec.mark || {};
+  if (m.source === 'gen' && m.gen) { drawGen(sc, m.gen, cx, cy, size, color, c2 && contrast(c2, color) > 1.3 ? c2 : mix(color, '#ffffff', 0.45)); return; }
   if (m.source === 'sketch' && m.sketch?.paths?.length) {
     const k = size / 100, tf = [k, 0, 0, k, cx - 50 * k, cy - 50 * k];
     for (const p of m.sketch.paths) {
@@ -186,7 +188,7 @@ function drawMark(sc, spec, cx, cy, size, color, { erase = false, boldK = 1 } = 
 }
 function markWithContainer(sc, spec, cx, cy, r, col) {
   const ct = spec.mark?.container || 'none';
-  if (ct === 'none') { drawMark(sc, spec, cx, cy, r * 2, col.primary); return; }
+  if (ct === 'none') { drawMark(sc, spec, cx, cy, r * 2, col.primary, { c2: col.secondary }); return; }
   const d = containerD(ct, cx, cy, r);
   if (spec.mark?.style === 'line') { sc.path(d, { stroke: col.primary, lw: r * 0.07 }); drawMark(sc, spec, cx, cy, r * 1.15, col.primary); }
   else { sc.path(d, { fill: col.primary }); drawMark(sc, spec, cx, cy, r * 1.15, onColor(col.primary, col.secondary)); }
@@ -321,7 +323,7 @@ function build(spec, col) {
     if (sub) { const ss = Math.min(size * 0.62, N * 0.26); usedB = arcText(sc, sub, 0, 0, rText, ss, 'Inter', 600, ss * 0.3, fg, true); }
     // separators sit in the gaps between the two arcs, so they can never touch the text
     for (const sx of [-1, 1]) sc.path(circleD(sx * rText, 0, N * 0.04), { fill: fg });
-    if (spec.mark?.glyph || spec.mark?.sketch) drawMark(sc, spec, 0, 0, R * 0.68, fg);
+    if (spec.mark?.glyph || spec.mark?.sketch || spec.mark?.gen) drawMark(sc, spec, 0, 0, R * 0.68, fg);
     else { const ini = [...name.replace(/^the\s+/i, '')][0].toUpperCase(), s2 = R * 0.62, iw = measure(ini, spec.font, weight, s2).w, ic = measure(ini, spec.font, weight, s2).asc; sc.text(ini, -iw / 2, ic / 2, { font: spec.font, weight, size: s2, fill: fg }); }
   }
   return sc;
@@ -445,14 +447,16 @@ export function designLogos(ctx) {
     return { name, layout, font, weight: W || (VARIABLE(font) && i % 2 === 0 ? 'bold' : 'regular'), case: c, tracking: trackFor(font, c), treatment: 'none', mark: { source: 'none' }, colors: { primary, secondary }, sub: '', category: cat, ...extra };
   };
   const sub = CATEGORIES[cat]?.sub || '';
+  const gens = genReady() && !deva ? genMarks(name, ctx.seed ?? hash(name), 4, prefs) : null;
+  const G = (i, fallback) => (gens ? { source: 'gen', gen: gens[i], container: 'none' } : fallback);
   const swapOk = /[oO0]/.test(name.slice(1)) || /[oO]/.test(name);
   const lists = {
-    wordmark: [S('wordmark', 0, { treatment: treats[0] }), S('wordmark', 1, { treatment: 'none' }), S('stacked', 2, { sub }), S('wordmark', 3, { treatment: swapOk ? 'swap' : treats[1], mark: mark(0) }), S('mark-left', 4, { mark: mark(1, shape || 'none') }), S('lettermark', 5, { mark: { source: 'none', container: shape || 'circle' } })],
-    lettermark: [S('lettermark', 0, { mark: { source: 'none', container: shape || 'circle' } }), S('lettermark', 1, { mark: { source: 'none', container: 'none' } }), S('lettermark', 2, { mark: { source: 'none', container: shape || 'square', style: 'line' } }), S('wordmark', 3, { treatment: treats[0] }), S('mark-top', 4, { mark: mark(0, shape || 'circle') }), S('emblem', 5, { mark: mark(1), sub })],
-    symbol: [S('mark-left', 0, { mark: mark(0, 'none') }), S('mark-top', 1, { mark: mark(1, shape || 'circle') }), S('mark-left', 2, { mark: mark(2, shape || 'square') }), S('wordmark', 3, { treatment: swapOk ? 'swap' : treats[0], mark: mark(0) }), S('wordmark', 4, { treatment: treats[1] || 'split' }), S('stacked', 5, { sub })],
-    emblem: [S('emblem', 0, { mark: mark(0), sub }), S('emblem', 1, { mark: mark(1, 'circle', 'line'), sub }), S('mark-top', 2, { mark: mark(2, shape || 'arch') }), S('lettermark', 3, { mark: { source: 'none', container: shape || 'shield' } }), S('wordmark', 4, { treatment: treats[0] }), S('stacked', 5, { sub })],
+    wordmark: [S('wordmark', 0, { treatment: treats[0] }), S('wordmark', 1, { treatment: 'none' }), S('mark-left', 2, { mark: G(0, mark(1)) }), S('wordmark', 3, { treatment: swapOk ? 'swap' : treats[1], mark: mark(0) }), S('stacked', 4, { sub }), S('mark-top', 5, { mark: G(1, { source: 'none', container: shape || 'circle' }) })],
+    lettermark: [S('mark-top', 0, { mark: G(0, mark(0, shape || 'circle')) }), S('mark-top', 1, { mark: G(1, mark(1)) }), S('lettermark', 2, { mark: { source: 'none', container: shape || 'circle' } }), S('mark-left', 3, { mark: G(2, mark(2)) }), S('wordmark', 4, { treatment: treats[0] }), S('emblem', 5, { mark: G(3, mark(1)), sub })],
+    symbol: [S('mark-left', 0, { mark: mark(0, 'none') }), S('mark-top', 1, { mark: G(0, mark(1, shape || 'circle')) }), S('mark-left', 2, { mark: G(1, mark(2, shape || 'square')) }), S('wordmark', 3, { treatment: swapOk ? 'swap' : treats[0], mark: mark(0) }), S('mark-top', 4, { mark: mark(1, shape || 'circle') }), S('stacked', 5, { sub })],
+    emblem: [S('emblem', 0, { mark: mark(0), sub }), S('emblem', 1, { mark: G(0, mark(1, 'circle', 'line')), sub }), S('mark-top', 2, { mark: mark(2, shape || 'arch') }), S('lettermark', 3, { mark: { source: 'none', container: shape || 'shield' } }), S('mark-top', 4, { mark: G(1, mark(0)) }), S('stacked', 5, { sub })],
   };
-  lists.surprise = [lists.wordmark[0], lists.symbol[0], lists.lettermark[0], lists.emblem[0], lists.wordmark[2], lists.symbol[1]];
+  lists.surprise = [lists.wordmark[0], lists.lettermark[0], lists.symbol[0], lists.emblem[1], lists.wordmark[4], lists.lettermark[3]];
   // their own drawing leads: 4 of the 6 use it
   const drawn = [S('mark-left', 0, { mark: mark(0) }), S('mark-top', 1, { mark: mark(0, 'none') }), S('emblem', 2, { mark: mark(0), sub }), swapOk ? S('wordmark', 3, { treatment: 'swap', mark: mark(0) }) : S('mark-left', 3, { mark: mark(0, shape || 'circle') }), S('wordmark', 4, { treatment: treats[0] }), S('stacked', 5, { sub })];
   const out = (sketch ? drawn : lists[ctx.type] || lists.surprise).map((s, i) => ({ ...s, colors: i % 3 === 1 ? { primary, secondary: primary } : { primary, secondary } }));
@@ -477,6 +481,7 @@ export function enforceLogos(specs, ctx) {
     if (o.treatment === 'outline' && !(['Bebas Neue', 'Abril Fatface', 'Shrikhand', 'Unbounded', 'Rozha One'].includes(o.font))) o.treatment = 'none'; // thin outlines vanish when small
     const m = { source: 'none', container: 'none', style: 'fill', ...(o.mark || {}) };
     if (m.source === 'sketch' && !ctx.sketch) m.source = 'glyph';
+    if (m.source === 'gen' && !m.gen) m.source = 'glyph';
     if (m.source === 'sketch') m.sketch = ctx.sketch;
     if (m.source === 'glyph' && !allowed.includes(m.glyph)) m.glyph = allowed[i % allowed.length];
     if (!CONTAINERS[m.container]) m.container = 'none';

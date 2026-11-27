@@ -1,6 +1,7 @@
 // Logo Studio: draw your idea or describe it → 6 real logo options → tweak → lock.
 import { renderLogo, logoSVG, designLogos, enforceLogos, variations, detectCategory, glyphsFor, vibesToPrefs, GLYPHS, LAYOUTS, TREATMENTS, CONTAINERS, LOGO_FONTS } from './logo.js';
 import { SketchPad, refineSketch } from './sketch.js';
+import { loadGenFonts, genMarks, initials, GEN_KINDS, GEN_FONT_LABELS } from './genmark.js';
 import { FONTS, loadFonts, mix } from './art.js';
 import { askAI } from './design.js';
 
@@ -21,7 +22,7 @@ function paintInto(canvas, spec, { mono = false, bg = '#faf7f2', pad: p = 0.14 }
   const k = Math.min((W * (1 - 2 * p)) / r.width, (H * (1 - 2 * p)) / r.height);
   g.drawImage(r, (W - r.width * k) / 2, (H - r.height * k) / 2, r.width * k, r.height * k);
 }
-const ctx = () => ({ name: S.name, brief: S.brief, category: detectCategory(`${S.brief} ${S.name} ${S.idea}`), prefs: S.prefs, type: S.type, shape: S.shape, colors: S.colors, idea: S.idea, sketch: S.tab === 'draw' && S.sketches ? S.sketches[S.sketchMode] : null });
+const ctx = () => ({ seed: S.seed, name: S.name, brief: S.brief, category: detectCategory(`${S.brief} ${S.name} ${S.idea}`), prefs: S.prefs, type: S.type, shape: S.shape, colors: S.colors, idea: S.idea, sketch: S.tab === 'draw' && S.sketches ? S.sketches[S.sketchMode] : null });
 
 // ---------- make view ----------
 function renderMake() {
@@ -71,6 +72,8 @@ async function makeOptions() {
   showResults();
   $('#ls-grid').innerHTML = Array.from({ length: 6 }, () => '<div class="ls-card skel"><i></i></div>').join('');
   $('#ls-res-note').textContent = 'Designing…'; $('#ls-tweak').innerHTML = '';
+  S.seed = Math.floor(Math.random() * 1e9); // new ideas every time
+  await loadGenFonts();
   const c = ctx();
   let opts = null, note = '';
   if (isAI()) {
@@ -83,7 +86,9 @@ async function makeOptions() {
   }
   if (!S.name.trim()) S.name = 'Your Brand';
   const local = designLogos({ ...c, name: S.name });
-  opts = opts ? enforceLogos([...opts, ...local].slice(0, Math.max(6, opts.length)).slice(0, 6), { ...c, name: S.name }) : local;
+  // AI ideas + at least two one-of-a-kind generated marks from their own letters
+  const gen = local.filter((o) => o.mark?.source === 'gen').slice(0, 2);
+  opts = opts ? enforceLogos([...opts.slice(0, 6 - gen.length), ...gen, ...local].slice(0, 6), { ...c, name: S.name }) : local;
   S.options = opts; S.sel = 0; S.busy = false;
   await loadFonts(...new Set(opts.map((o) => o.font)));
   $('#ls-res-note').textContent = note;
@@ -116,7 +121,9 @@ function renderTweak() {
       <label class="lt"><span>Spacing</span><input type="range" min="-4" max="30" step="1" value="${o.tracking}" data-t="tracking"/></label>
       <label class="lt"><span>Detail</span><select data-t="treatment">${Object.entries(TREATMENTS).map(([k, v]) => `<option value="${k}" ${o.treatment === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>`,
     symbol: `
-      <div class="lt"><span>Symbol</span><div class="chips icons">${markOpts.map((g) => `<button type="button" data-t="mark" data-v="${g}" class="${curMark === g ? 'on' : ''}" title="${g === '__sketch' ? 'My drawing' : g}">${g === '__sketch' ? '✍ Mine' : g === 'none' ? 'None' : glyphSvg(g)}</button>`).join('')}</div></div>
+      <div class="lt"><span>Made from your letters</span><div class="chips">${Object.entries(GEN_KINDS).map(([k, v]) => `<button type="button" data-t="genkind" data-v="${k}" class="${o.mark?.source === 'gen' && o.mark.gen?.kind === k ? 'on' : ''}">${v}</button>`).join('')}</div>
+        ${o.mark?.source === 'gen' ? `<div class="lt two"><label><span>Letter style</span><select data-t="genfont">${Object.entries(GEN_FONT_LABELS).map(([k, v]) => `<option value="${k}" ${o.mark.gen.font === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label><div><span>&nbsp;</span><button type="button" class="ghost small" data-t="genshuffle">↻ Shuffle</button></div></div>` : ''}</div>
+      <div class="lt"><span>Or a symbol</span><div class="chips icons">${markOpts.map((g) => `<button type="button" data-t="mark" data-v="${g}" class="${curMark === g ? 'on' : ''}" title="${g === '__sketch' ? 'My drawing' : g}">${g === '__sketch' ? '✍ Mine' : g === 'none' ? 'None' : glyphSvg(g)}</button>`).join('')}</div></div>
       <div class="lt"><span>Shape</span><div class="chips">${Object.entries(CONTAINERS).map(([k, v]) => `<button type="button" data-t="container" data-v="${k}" class="${(o.mark?.container || 'none') === k ? 'on' : ''}">${v}</button>`).join('')}</div></div>
       <label class="check"><input type="checkbox" data-t="style" ${o.mark?.style === 'line' ? 'checked' : ''}/><span>Outline instead of solid</span></label>`,
     colour: `
@@ -143,6 +150,9 @@ function tweak(t, v) {
   else if (t === 'container') o.mark.container = v;
   else if (t === 'style') o.mark.style = o.mark.style === 'line' ? 'fill' : 'line';
   else if (t === 'pick') o.colors.primary = v;
+  else if (t === 'genkind') { const L = initials(o.name || S.name); const prev = o.mark.source === 'gen' ? o.mark.gen : genMarks(o.name || S.name, Math.floor(Math.random() * 1e9), 1)[0]; o.mark = { ...o.mark, source: 'gen', container: 'none', gen: { ...prev, kind: v, letters: v === 'interlock' ? (L.length > 1 ? L : L + L) : L[0] } }; if (o.layout === 'wordmark' || o.layout === 'stacked' || o.layout === 'lettermark') o.layout = 'mark-top'; }
+  else if (t === 'genshuffle' && o.mark.gen) o.mark = { ...o.mark, gen: { ...o.mark.gen, seed: Math.floor(Math.random() * 1e9) } };
+  else if (t === 'genfont' && o.mark.gen) o.mark = { ...o.mark, gen: { ...o.mark.gen, font: v } };
   else if (t === 'primary' || t === 'secondary') o.colors[t] = v;
   if (o.layout === 'emblem') o.mark.container = 'circle';
   if (['mark-left', 'mark-top'].includes(o.layout) && o.mark.source === 'none') o.mark = { ...o.mark, source: 'glyph', glyph: glyphsFor(ctx().category, S.idea)[0] };

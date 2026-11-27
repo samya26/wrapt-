@@ -288,17 +288,137 @@ export function buildBag(brand, opts, renderer) {
   return { group: shadowAll(g), height: H + 0.3, radius: Math.max(W, D) / 2 * 1.1 };
 }
 
-export const BUILDERS = { can: buildCan, box: buildBox, tub: buildTub, jar: buildJar, pouch: buildPouch, bottle: buildBottle, tube: buildTube, papertube: buildPaperTube, cup: buildCup, card: buildCard, bag: buildBag };
+// ---------- ROUND TIN (tea, balms, candles, mints) ----------
+export function buildTin(brand, opts, renderer) {
+  const r = opts.r ?? 0.5, h = opts.h ?? 0.38;
+  const g = new THREE.Group();
+  const metal = new THREE.MeshPhysicalMaterial({ color: '#c9ccd1', metalness: 0.95, roughness: 0.28 });
+  const bodyH = h * 0.78, art = paintWrap(brand, (2 * Math.PI * r) / bodyH);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, bodyH, 128, 1, true), printMat(tex(art, renderer), opts.finish === 'matte' ? 'matte' : 'gloss'));
+  body.position.y = bodyH / 2; body.rotation.y = Math.PI; g.add(body);
+  const base = new THREE.Mesh(new THREE.CircleGeometry(r, 64), metal); base.rotation.x = Math.PI / 2; base.position.y = 0.002; g.add(base);
+  const lidH = h * 0.3, lidR = r * 1.03;
+  const lidSide = new THREE.Mesh(new THREE.CylinderGeometry(lidR, lidR, lidH, 128, 1, true), new THREE.MeshPhysicalMaterial({ color: brand.accent, metalness: opts.finish === 'metallic' ? 0.9 : 0.4, roughness: 0.3, clearcoat: 0.5 }));
+  lidSide.position.y = h - lidH / 2; g.add(lidSide);
+  const top = new THREE.Mesh(new THREE.CircleGeometry(lidR, 96), printMat(tex(paintDisc(brand), renderer), 'gloss')); top.rotation.set(-Math.PI / 2, 0, -0.55); top.position.y = h; g.add(top);
+  for (const y of [h - lidH, h]) { const rim = new THREE.Mesh(new THREE.TorusGeometry(lidR, 0.008, 8, 128), metal); rim.rotation.x = Math.PI / 2; rim.position.y = y; g.add(rim); }
+  g.rotation.y = 0.5;
+  return { group: shadowAll(g), height: h, radius: lidR };
+}
+
+// ---------- GIFT BOX WITH LID (sweets, jewellery, hampers) ----------
+export function buildLidBox(brand, opts, renderer) {
+  const W = opts.w ?? 1.0, D = opts.d ?? 1.0, H = opts.h ?? 0.42;
+  const g = new THREE.Group();
+  const baseMat = new THREE.MeshStandardMaterial({ color: brand.pack, roughness: 0.7 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(W * 0.985, H * 0.86, D * 0.985), baseMat); base.position.y = H * 0.43; g.add(base);
+  const lidH = H * 0.34, lidW = W * 1.01, lidD = D * 1.01;
+  const band = new THREE.MeshPhysicalMaterial({ color: brand.accent, roughness: opts.finish === 'gloss' ? 0.25 : 0.6, metalness: opts.finish === 'metallic' ? 0.85 : 0, clearcoat: opts.finish === 'gloss' ? 0.6 : 0 });
+  const topMat = printMat(tex(paintFace(brand, 'front', lidW / lidD), renderer), opts.finish);
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(lidW, lidH, lidD), [band, band, topMat, band, band, band]);
+  lid.position.y = H - lidH / 2 + 0.01; g.add(lid);
+  // ribbon
+  const rib = new THREE.MeshPhysicalMaterial({ color: isDark(brand.pack) ? '#d9b46a' : brand.accent, roughness: 0.35, sheen: 1 });
+  const r1 = new THREE.Mesh(new THREE.BoxGeometry(lidW * 1.002, H * 1.01, 0.05), rib); r1.position.set(0, H * 0.505, lidD * 0.32); r1.scale.set(1, 1, 1); g.add(r1);
+  g.rotation.set(0.0, 0.55, 0);
+  return { group: shadowAll(g), height: H, radius: Math.max(W, D) * 0.62, topView: true };
+}
+
+// ---------- BAR WRAPPER (chocolate, soap, granola bars): flow wrap with crimped ends ----------
+export function buildBar(brand, opts, renderer) {
+  const W = opts.w ?? 1.3, H = opts.h ?? 0.6, T = 0.09;
+  const g = new THREE.Group();
+  const mk = (role) => printMat(tex(paintFace(brand, role, W / H), renderer), opts.finish === 'matte' ? 'matte' : opts.finish);
+  const edge = new THREE.MeshPhysicalMaterial({ color: brand.pack, roughness: 0.35, clearcoat: 0.6 });
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(W, H, T), [edge, edge, edge, edge, mk('front'), mk('back')]);
+  bar.position.y = H / 2; g.add(bar);
+  for (const sx of [-1, 1]) {
+    const fin = new THREE.Group();
+    for (let i = 0; i < 7; i++) { const rid = new THREE.Mesh(new THREE.BoxGeometry(0.009, H * 1.02, T * 0.28), edge); rid.position.x = i * 0.013; fin.add(rid); }
+    fin.position.set(sx * (W / 2 + 0.006) + (sx < 0 ? -0.09 : 0), H / 2, 0); g.add(fin);
+  }
+  g.rotation.set(0, 0.35, 0);
+  return { group: shadowAll(g), height: H, radius: W / 2 + 0.1 };
+}
+
+// ---------- bottle helper + DROPPER and PUMP bottles (serums, oils, lotions) ----------
+function bottleBody(brand, opts, renderer, r, h, neck, glass) {
+  const g = new THREE.Group();
+  const nr = r * neck, sh = h * 0.7;
+  const prof = [[0, 0], [r * 0.92, 0], [r, 0.03], [r, sh]];
+  for (let i = 1; i <= 8; i++) { const t = i / 8; prof.push([r - (r - nr) * (1 - Math.cos((t * Math.PI) / 2)), sh + (h * 0.88 - sh) * Math.sin((t * Math.PI) / 2)]); }
+  prof.push([nr, h], [0, h]);
+  const mat = new THREE.MeshPhysicalMaterial(glass ? { color: glass, roughness: 0.06, clearcoat: 1, transmission: 0.2, thickness: 0.2 } : { color: brand.pack, roughness: 0.3, clearcoat: 0.7 });
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(prof.map(([x, y]) => new THREE.Vector2(x, y)), 96), mat));
+  const bandH = h * 0.5, art = paintWrap(brand, (2 * Math.PI * r) / bandH);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.006, r * 1.006, bandH, 128, 1, true), printMat(tex(art, renderer), opts.finish === 'metallic' ? 'gloss' : opts.finish));
+  band.position.y = sh * 0.52; band.rotation.y = Math.PI; g.add(band);
+  return g;
+}
+export function buildDropper(brand, opts, renderer) {
+  const r = opts.r ?? 0.2, h = opts.h ?? 0.62;
+  const g = bottleBody(brand, opts, renderer, r, h, 0.42, '#5a3214');
+  const dark = new THREE.MeshPhysicalMaterial({ color: '#1c1a17', roughness: 0.3, clearcoat: 0.6, metalness: opts.finish === 'metallic' ? 0.8 : 0.1 });
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.5, r * 0.5, h * 0.16, 48), opts.finish === 'metallic' ? new THREE.MeshPhysicalMaterial({ color: '#d9b46a', metalness: 1, roughness: 0.25 }) : dark); collar.position.y = h * 1.07; g.add(collar);
+  const bulb = new THREE.Mesh(new THREE.CapsuleGeometry(r * 0.36, h * 0.2, 8, 32), new THREE.MeshPhysicalMaterial({ color: '#1c1a17', roughness: 0.6 })); bulb.position.y = h * 1.3; g.add(bulb);
+  g.rotation.y = 0.5;
+  return { group: shadowAll(g), height: h * 1.46, radius: r };
+}
+export function buildPump(brand, opts, renderer) {
+  const r = opts.r ?? 0.28, h = opts.h ?? 1.15;
+  const g = bottleBody(brand, opts, renderer, r, h, 0.36, null);
+  const capMat = new THREE.MeshPhysicalMaterial({ color: isDark(brand.pack) ? brand.accent : '#f4f1ea', roughness: 0.3, clearcoat: 0.6, metalness: opts.finish === 'metallic' ? 0.85 : 0 });
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.42, r * 0.42, h * 0.08, 48), capMat); collar.position.y = h * 1.03; g.add(collar);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.12, r * 0.12, h * 0.12, 24), capMat); stem.position.y = h * 1.12; g.add(stem);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(r * 0.5, h * 0.06, r * 0.5), capMat); head.position.y = h * 1.2; g.add(head);
+  const spout = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.07, r * 0.07, r * 0.75, 16), capMat); spout.rotation.z = Math.PI / 2; spout.position.set(r * 0.55, h * 1.21, 0); g.add(spout);
+  g.rotation.y = 0.5;
+  return { group: shadowAll(g), height: h * 1.24, radius: r };
+}
+
+// ---------- TAKEOUT BOX (noodles, momos, cloud kitchens) ----------
+export function buildTakeout(brand, opts, renderer) {
+  const wb = opts.w ?? 0.62, h = opts.h ?? 0.85, wt = wb * 1.35;
+  const g = new THREE.Group();
+  const quad = (canvas, a, b, c, d) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute([...a, ...b, ...c, ...d], 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+    geo.setIndex([0, 1, 2, 0, 2, 3]); geo.computeVertexNormals();
+    const m = canvas ? printMat(tex(canvas, renderer), opts.finish) : new THREE.MeshStandardMaterial({ color: brand.pack, roughness: 0.8 });
+    m.side = THREE.DoubleSide; return new THREE.Mesh(geo, m);
+  };
+  const b2 = wb / 2, t2 = wt / 2;
+  const front = paintFace({ ...brand, _wrapK: 0.8 }, 'front', (wb + wt) / 2 / h), back = paintFace(brand, 'back', (wb + wt) / 2 / h);
+  g.add(quad(front, [-b2, 0, b2], [b2, 0, b2], [t2, h, t2], [-t2, h, t2]));
+  g.add(quad(back, [b2, 0, -b2], [-b2, 0, -b2], [-t2, h, -t2], [t2, h, -t2]));
+  g.add(quad(null, [-b2, 0, -b2], [-b2, 0, b2], [-t2, h, t2], [-t2, h, -t2]));
+  g.add(quad(null, [b2, 0, b2], [b2, 0, -b2], [t2, h, -t2], [t2, h, t2]));
+  // folded top flaps
+  const f = h * 0.16;
+  g.add(quad(null, [-t2, h, t2], [t2, h, t2], [t2 * 0.7, h + f, t2 * 0.25], [-t2 * 0.7, h + f, t2 * 0.25]));
+  g.add(quad(null, [t2, h, -t2], [-t2, h, -t2], [-t2 * 0.7, h + f, -t2 * 0.25], [t2 * 0.7, h + f, -t2 * 0.25]));
+  const wire = new THREE.CatmullRomCurve3([new THREE.Vector3(-t2 * 1.0, h * 0.86, 0), new THREE.Vector3(-t2 * 0.8, h * 1.45, 0), new THREE.Vector3(0, h * 1.62, 0), new THREE.Vector3(t2 * 0.8, h * 1.45, 0), new THREE.Vector3(t2 * 1.0, h * 0.86, 0)]);
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(wire, 40, 0.008, 8, false), new THREE.MeshStandardMaterial({ color: '#b9bcc2', metalness: 0.9, roughness: 0.3 })));
+  g.rotation.y = 0.5;
+  return { group: shadowAll(g), height: h * 1.6, radius: t2 * 1.1 };
+}
+
+export const BUILDERS = { can: buildCan, slimcan: (b, o, r) => buildCan(b, o, r), box: buildBox, tub: buildTub, jar: buildJar, pouch: buildPouch, bottle: buildBottle, tube: buildTube, papertube: buildPaperTube, cup: buildCup, card: buildCard, bag: buildBag, tin: buildTin, lidbox: buildLidBox, bar: buildBar, dropper: buildDropper, pump: buildPump, takeout: buildTakeout };
 export const DEFAULTS = {
   can: { r: 0.33, h: 1.15 }, box: { w: 1.0, h: 1.3, d: 0.45 }, tub: { r: 0.5, h: 0.55 }, jar: { r: 0.38, h: 0.78 }, pouch: { w: 0.9, h: 1.25 },
   bottle: { r: 0.3, h: 1.45 }, tube: { r: 0.22, h: 1.2 }, papertube: { r: 0.3, h: 1.1 }, cup: { r: 0.4, h: 0.95 }, card: { w: 0.8, h: 1.2 }, bag: { w: 0.9, h: 1.0, d: 0.38 },
+  slimcan: { r: 0.27, h: 1.45 }, tin: { r: 0.5, h: 0.38 }, lidbox: { w: 1.0, h: 0.42, d: 1.0 }, bar: { w: 1.3, h: 0.6 }, dropper: { r: 0.2, h: 0.62 }, pump: { r: 0.28, h: 1.15 }, takeout: { w: 0.62, h: 0.85 },
 };
-export const PRODUCT_NAMES = { can: 'Can', box: 'Box', tub: 'Tub', jar: 'Jar', pouch: 'Pouch', bottle: 'Bottle', tube: 'Tube', papertube: 'Paper tube', cup: 'Cup', card: 'Hang card', bag: 'Bag' };
+export const PRODUCT_NAMES = { can: 'Can', slimcan: 'Slim can', box: 'Box', tub: 'Tub', jar: 'Jar', pouch: 'Pouch', bottle: 'Bottle', tube: 'Tube', papertube: 'Paper tube', cup: 'Cup', card: 'Hang card', bag: 'Bag', tin: 'Tin', lidbox: 'Gift box', bar: 'Bar wrap', dropper: 'Dropper', pump: 'Pump bottle', takeout: 'Takeout box' };
 // Printed area of each product, in mm (1 unit = 10 cm) — used by the print-ready PDF
 export function printArea(product, d) {
   const C = (r) => 2 * Math.PI * r * 100;
   if (product === 'box') return { kind: 'box', w: (2 * d.d + 2 * d.w) * 100, h: (2 * d.d + d.h) * 100 };
-  if (product === 'pouch' || product === 'card' || product === 'bag') return { kind: 'faces', w: d.w * 100, h: d.h * 100 };
+  if (product === 'pouch' || product === 'card' || product === 'bag' || product === 'bar' || product === 'takeout') return { kind: 'faces', w: d.w * 100, h: d.h * 100 };
+  if (product === 'lidbox') return { kind: 'faces', w: d.w * 100, h: d.d * 100 };
+  if (product === 'tin') return { kind: 'wrap', w: C(d.r), h: d.h * 78 };
+  if (product === 'dropper' || product === 'pump') return { kind: 'wrap', w: C(d.r), h: d.h * 50 };
   if (product === 'tub' || product === 'cup') { const rb = product === 'tub' ? d.r * 0.8 : d.r * 0.72; return { kind: 'wrap', w: Math.PI * (d.r + rb) * 100, h: d.h * 100 }; }
   if (product === 'jar') return { kind: 'wrap', w: C(d.r), h: d.h * 50 };
   if (product === 'bottle') return { kind: 'wrap', w: C(d.r), h: d.h * 42 };

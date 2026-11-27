@@ -3,7 +3,7 @@
 // Because a plan is data, not a picture, every result stays editable.
 import { contrast, luminance, mix, isDark, autoInk, readable, averageColor, logoCoverage, plainCorners, paper, ink, FONTS, PATTERNS, BORDERS, CENTRES, borderType } from './art.js';
 
-export const PRODUCTS = ['can', 'box', 'tub', 'jar', 'pouch', 'bottle', 'tube', 'papertube', 'cup', 'card', 'bag'];
+export const PRODUCTS = ['can', 'slimcan', 'box', 'tub', 'jar', 'pouch', 'bottle', 'tube', 'papertube', 'cup', 'card', 'bag', 'tin', 'lidbox', 'bar', 'dropper', 'pump', 'takeout'];
 export const STYLES = ['classic', 'bold', 'minimal', 'heritage'];
 export const PLAN_KEYS = { product: PRODUCTS, style: STYLES, fontsDisplay: Object.keys(FONTS), pattern: Object.keys(PATTERNS).filter((p) => p !== 'none').concat('none'), border: Object.keys(BORDERS).filter((b) => b !== 'image'), finish: ['gloss', 'matte', 'metallic'], light: ['studio', 'sunlit', 'dramatic'] };
 
@@ -33,21 +33,26 @@ const COLOR_WORDS = { red: '#c0392b', green: '#2f7d4a', blue: '#2a5ca8', yellow:
 
 // Which packs make sense for what they sell (no keychains in a drink can).
 const PACK_RULES = [
-  [['keychain', 'key chain', 'charm', 'jewel', 'earring', 'necklace', 'bracelet', 'accessor', 'sticker', 'bookmark', 'hair clip', 'scrunch', 'crochet', 'phone case', 'toy', 'stationery', 'polymer clay', 'resin', 'pin badge', 'magnet'], ['card', 'box', 'bag', 'pouch']],
+  [['earring', 'necklace', 'bracelet', 'jewel', 'ring '], ['lidbox', 'card', 'bag', 'box']],
+  [['keychain', 'key chain', 'charm', 'accessor', 'sticker', 'bookmark', 'hair clip', 'scrunch', 'crochet', 'phone case', 'toy', 'stationery', 'polymer clay', 'resin', 'pin badge', 'magnet'], ['card', 'box', 'lidbox', 'bag']],
+  [['chocolate bar', 'protein bar', 'granola bar', 'soap bar', 'bar of'], ['bar', 'box', 'lidbox']],
+  [['noodle', 'momo', 'takeaway', 'take-away', 'cloud kitchen', 'biryani', 'fried rice', 'street food'], ['takeout', 'bag', 'cup', 'box']],
+  [['serum', 'face oil', 'beard oil', 'essential oil', 'tincture'], ['dropper', 'bottle', 'box']],
+  [['lotion', 'shampoo', 'conditioner', 'body wash', 'hand wash', 'face wash'], ['pump', 'bottle', 'tube']],
   [['cloth', 't-shirt', 'tshirt', 'saree', 'kurta', 'apparel', 'scarf', 'socks', 'shoe', 'sneaker', 'tote', 'fashion'], ['bag', 'box', 'card', 'pouch']],
-  [['candle', 'wax', 'incense', 'agarbatti', 'dhoop'], ['jar', 'box', 'papertube']],
-  [['skincare', 'serum', 'lotion', 'shampoo', 'hair oil', 'face wash', 'lip', 'nail', 'makeup', 'perfume', 'soap', 'balm', 'sunscreen', 'face cream', 'body wash', 'cosmetic'], ['bottle', 'tube', 'jar', 'box']],
+  [['candle', 'wax', 'incense', 'agarbatti', 'dhoop'], ['jar', 'tin', 'box', 'papertube']],
+  [['skincare', 'serum', 'lotion', 'shampoo', 'hair oil', 'face wash', 'lip', 'nail', 'makeup', 'perfume', 'soap', 'balm', 'sunscreen', 'face cream', 'body wash', 'cosmetic'], ['bottle', 'tube', 'dropper', 'pump', 'jar', 'tin']],
   [['ice cream', 'icecream', 'kulfi', 'dessert', 'curd', 'yogurt', 'kheer', 'pudding', 'mousse', 'gelato'], ['tub', 'cup', 'jar', 'box']],
-  [['juice', 'soda', 'kombucha', 'beer', 'drink', 'cola', 'energy', 'sparkling', 'cold brew', 'water', 'lemonade', 'smoothie', 'milkshake', 'shake'], ['can', 'bottle', 'cup', 'pouch']],
+  [['juice', 'soda', 'kombucha', 'beer', 'drink', 'cola', 'energy', 'sparkling', 'cold brew', 'water', 'lemonade', 'smoothie', 'milkshake', 'shake'], ['can', 'slimcan', 'bottle', 'cup']],
   [['sauce', 'ketchup', 'oil', 'vinegar', 'syrup', 'dressing'], ['bottle', 'jar', 'pouch']],
   [['pickle', 'achaar', 'achar', 'jam', 'honey', 'ghee', 'chutney', 'spread', 'butter'], ['jar', 'bottle', 'pouch']],
   [['coffee', 'espresso', 'beans'], ['pouch', 'box', 'papertube', 'can', 'cup']],
-  [['tea', 'chai', 'tulsi', 'matcha', 'kahwa'], ['box', 'pouch', 'papertube', 'jar']],
-  [['cookie', 'cake', 'brownie', 'bread', 'bakery', 'chocolate', 'mithai', 'sweets', 'laddoo', 'barfi', 'dessert box'], ['box', 'bag', 'tub', 'pouch']],
+  [['tea', 'chai', 'tulsi', 'matcha', 'kahwa'], ['tin', 'box', 'pouch', 'papertube']],
+  [['cookie', 'cake', 'brownie', 'bread', 'bakery', 'chocolate', 'mithai', 'sweets', 'laddoo', 'barfi', 'dessert box'], ['lidbox', 'box', 'bar', 'bag']],
   [['snack', 'chips', 'namkeen', 'granola', 'nuts', 'makhana', 'flour', 'pasta', 'spice', 'masala', 'rice', 'dal', 'cereal', 'oats', 'millet'], ['pouch', 'box', 'jar', 'papertube']],
   [['pet', 'dog', 'cat'], ['pouch', 'box', 'bag']],
 ];
-const NAMED = { 'paper tube': 'papertube', 'gift tube': 'papertube', 'hang card': 'card', 'header card': 'card', 'shopping bag': 'bag', 'paper bag': 'bag', 'squeeze tube': 'tube' };
+const NAMED = { 'paper tube': 'papertube', 'gift tube': 'papertube', 'hang card': 'card', 'header card': 'card', 'shopping bag': 'bag', 'paper bag': 'bag', 'squeeze tube': 'tube', 'slim can': 'slimcan', 'gift box': 'lidbox', 'takeout box': 'takeout', 'noodle box': 'takeout', 'pump bottle': 'pump', 'dropper bottle': 'dropper' };
 export function allowedPacks(t) {
   t = ` ${String(t).toLowerCase()} `;
   for (const [words, packs] of PACK_RULES) if (KW(t, words)) return packs;
@@ -95,7 +100,7 @@ export function designLocally(brief, { refColors = [], hasLogo = false } = {}) {
   const hindi = /[ऀ-ॿ]/.test(name);
   const tagline = KW(t, ['homemade', 'amma', 'nani', 'mom']) ? 'Made the way it is at home' : KW(t, ['organic', 'natural', 'herbal']) ? 'Pure, honest, natural' : KW(t, ['premium', 'luxury']) ? 'Crafted in small batches' : 'Made with care';
   const accessory = allowedPacks(t)[0] === 'card' || allowedPacks(t)[0] === 'bag';
-  const detail = accessory ? 'Handmade · 1 piece' : { jar: 'Net wt. 250 g', can: '330 ml', tub: 'Net wt. 450 g', pouch: 'Net wt. 200 g', box: 'Net wt. 250 g', bottle: '250 ml', tube: '100 ml', papertube: 'Net wt. 100 g', cup: '350 ml', card: '1 piece', bag: 'Gift bag' }[product];
+  const detail = accessory ? 'Handmade · 1 piece' : { jar: 'Net wt. 250 g', can: '330 ml', tub: 'Net wt. 450 g', pouch: 'Net wt. 200 g', box: 'Net wt. 250 g', bottle: '250 ml', tube: '100 ml', papertube: 'Net wt. 100 g', cup: '350 ml', card: '1 piece', bag: 'Gift bag', slimcan: '250 ml', tin: 'Net wt. 100 g', lidbox: 'Gift edition', bar: 'Net wt. 80 g', dropper: '30 ml', pump: '200 ml', takeout: 'Serves 1' }[product];
   const deeper = luminance(base) < luminance(acc) ? base : acc;
   const dark = isDark(deeper) ? deeper : mix(deeper, '#14100c', 0.45);
   const light = isDark(base) ? mix(acc, '#ffffff', 0.82) : mix(base, '#ffffff', 0.86);

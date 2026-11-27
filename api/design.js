@@ -5,7 +5,7 @@
 export const config = { maxDuration: 60 };
 
 const API = 'https://generativelanguage.googleapis.com/v1beta';
-const PRODUCTS = ['can', 'box', 'tub', 'jar', 'pouch', 'bottle', 'tube', 'papertube', 'cup', 'card', 'bag'];
+const PRODUCTS = ['can', 'slimcan', 'box', 'tub', 'jar', 'pouch', 'bottle', 'tube', 'papertube', 'cup', 'card', 'bag', 'tin', 'lidbox', 'bar', 'dropper', 'pump', 'takeout'];
 const CENTRES = ['none', 'spotlight', 'frame', 'arch', 'seal', 'sunburst', 'band', 'sash', 'block', 'split', 'bigtype', 'halftone'];
 const STYLES = ['classic', 'bold', 'minimal', 'heritage'];
 const FONTS = ['Instrument Serif', 'DM Serif Display', 'Bebas Neue', 'Space Grotesk', 'Inter', 'Caveat', 'Tiro Devanagari Hindi', 'Mukta', 'Fraunces', 'Cormorant Garamond', 'Marcellus', 'Abril Fatface', 'Rozha One', 'Young Serif', 'Shrikhand', 'Baloo 2', 'Unbounded', 'Bricolage Grotesque', 'Syne'];
@@ -41,7 +41,7 @@ Rules:
 - Patterns: rangoli/kolam (festive, South Indian), warli (tribal, earthy, Maharashtra), madhubani (Bihar folk art, fish motifs), kalamkari (paisley, premium ethnic), blockprint (Rajasthani booti, homely), botanical (natural/herbal), dots/stripes/chevron (modern/playful). opacity 0–0.6; heritage looks best 0.4–0.6, other styles 0.08–0.25.
 - Fonts: use 'Tiro Devanagari Hindi' or 'Mukta' whenever name or tagline contains Hindi/Devanagari. Bebas Neue = loud/young, DM Serif Display/Abril Fatface/Rozha One = premium & bold, Cormorant Garamond/Marcellus/Instrument Serif = elegant luxury, Fraunces/Young Serif = warm & friendly, Caveat = handmade, Shrikhand/Baloo 2 = playful, Space Grotesk/Inter/Unbounded/Syne/Bricolage Grotesque = modern.
 - Borders: double (classic), arch (Mughal arch window — candles, skincare, D2C), ticket (snacks, coffee), stamp (gifting, heritage), crop (printer's crop marks — minimal, editorial), nameband (brand name ribbon — bold, streetwear), checker (retro cafe, fun), wavy (kids, drinks), stitched (handmade, crafts), torn (rustic, artisanal), jali (Indian lattice — traditional), deco (art deco corners — luxury, gold), botanical (leaf corners — tea, natural, skincare), bauhaus (geometric blocks — bold, colourful), cutcorner (apothecary — spices, wellness), sticker (friendly label), none.
-- Packs: can, box, tub, jar, pouch, bottle (sauces, oils, drinks, skincare), tube (creams, gels), papertube (gift tubes: tea, candles), cup (coffee/smoothies to go), card (hang card for keychains, jewellery, accessories), bag (paper shopping/gift bag). Never put non-food items in food containers.
+- Packs: can, box, tub, jar, pouch, bottle (sauces, oils, drinks, skincare), tube (creams, gels), papertube (gift tubes: tea, candles), cup (coffee/smoothies to go), card (hang card for keychains, accessories), bag (paper shopping/gift bag), slimcan (energy drinks, sodas), tin (tea, balms, mints), lidbox (gift box with lid: sweets, jewellery, hampers), bar (flow wrap: chocolate, soap, protein bars), dropper (serums, oils), pump (lotions, shampoo), takeout (noodles, momos, cloud kitchens). Never put non-food items in food containers.
 - Centre (shape behind the logo): spotlight, frame (label panel), arch, seal, sunburst, band, sash (diagonal), block (colour block), split, bigtype (giant faint name), halftone, none.
 - The logo is designed separately — don't describe one.
 - Product: choose the packaging type that suits what they sell (jar for pickles/jams/ghee/creams, can for drinks, tub for desserts/ice cream/curd, pouch for tea/coffee/spices/snacks, box for sweets/cookies/soap/cosmetics/gifts) unless the user asks for one.
@@ -119,7 +119,9 @@ Rules for great, non-generic logos:
       required: ['layout', 'font', 'weight', 'case', 'tracking', 'treatment', 'mark', 'colors', 'rationale'] };
     schema = { type: 'OBJECT', properties: { name: S(), logos: { type: 'ARRAY', items: LOGO } }, required: ['name', 'logos'] };
   } else if (mode === 'refine') {
-    parts = [{ text: `${GUIDE}\n\nCurrent plan:\n${JSON.stringify(plan).slice(0, 4000)}\n\nUser request: """${String(instruction).slice(0, 500)}"""\nReturn the updated full plan (change only what the request implies) and a short friendly note saying what you changed.` }];
+    parts = [
+      ...(images || []).slice(0, 3).map((d) => ({ inline_data: { mime_type: 'image/jpeg', data: String(d).split(',').pop() } })),
+      { text: `${GUIDE}\n\nCurrent plan:\n${JSON.stringify(plan).slice(0, 4000)}\n\nUser request: """${String(instruction).slice(0, 500)}"""\n${(images || []).length ? 'Their mood photos are attached; if the request refers to them, take colours, mood and style from them (never copy logos or text).\n' : ''}Return the updated full plan (change only what the request implies) and a short friendly note saying what you changed.` }];
     schema = { type: 'OBJECT', properties: { plan: PLAN, note: S() }, required: ['plan', 'note'] };
   } else {
     parts = [{ text: `${GUIDE}\n\nCurrent plan:\n${JSON.stringify(plan).slice(0, 4000)}\n\nThe user asks: """${String(question).slice(0, 500)}"""\nAnswer as their designer in 2–4 friendly sentences, explaining the reasoning in plain words.` }];

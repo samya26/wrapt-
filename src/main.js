@@ -41,6 +41,8 @@ import { paintBox, paintWrap, paintFace, loadImage, extractPalette, templateFor,
 import { renderLogo, logoSVG, packColors, designLogos } from './logo.js';
 import { openLogoStudio, initLogoStudio } from './logostudio.js';
 import { initLanding } from './landing.js';
+import { openEditor, initEditor } from './editor.js';
+import { loadGenFonts } from './genmark.js';
 import { designLocally, refineLocally, normalizePlan, audit, askAI, allowedPacks } from './design.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -106,7 +108,8 @@ function specLogo(b) { const sp = { ...b.logoSpec, name: b.name || b.logoSpec.na
 const STYLE_PREFS = { classic: { modern: -0.5, serious: 0.5, bold: 0 }, minimal: { modern: 0.6, serious: 0.4, bold: -0.3, precise: 0.6 }, bold: { modern: 0.4, serious: -0.5, bold: 0.8 }, heritage: { modern: -0.7, serious: 0, bold: 0.4, precise: -0.3 } };
 function autoSpec(p) {
   const dark = luminance(p.palette.pack) < luminance(p.palette.accent) ? p.palette.pack : p.palette.accent;
-  return designLogos({ name: p.name, brief: $('#brief').value, type: 'wordmark', prefs: STYLE_PREFS[p.style] || {}, colors: [dark, p.palette.accent] })[0];
+  const opts = designLogos({ name: p.name, brief: $('#brief').value, type: 'surprise', prefs: STYLE_PREFS[p.style] || {}, colors: [dark, p.palette.accent] });
+  return opts.find((o) => o.mark?.source === 'gen') || opts[0]; // a one-of-a-kind mark from their own letters
 }
 function rebuild(now = false, { commitIt = true } = {}) {
   clearTimeout(buildT);
@@ -152,7 +155,7 @@ function planFromState() {
 function brandFromPlan(p, keepUploaded) {
   const b = { ...state.brand, fonts: { ...p.fonts }, pattern: { ...p.pattern, image: null }, border: { ...state.brand.border, type: borderType(p.border.type), image: null },
     name: p.name, tagline: p.tagline, detail: p.detail, pack: p.palette.pack, accent: p.palette.accent, ink: null, style: p.style, centre: p.centre || 'none',
-    logoSpec: state.brand.logoSpec || autoSpec(p), logoScale: p.logoScale ?? 1, logoY: 0, logoPlate: false, artwork: null };
+    logoSpec: state.brand.logoSpec || autoSpec(p), logoScale: p.logoScale ?? 1, logoY: 0, logoPlate: false, artwork: null, layers: state.brand.layers || [] };
   if (keepUploaded && state.brand.uploadedLogo) { b.logo = state.brand.uploadedLogo; b.logoSource = 'upload'; b.logoHasName = false; }
   else { b.logoSource = 'spec'; b.logo = specLogo(b); b.logoHasName = true; }
   return b;
@@ -194,7 +197,8 @@ $('#ref-file').addEventListener('change', async (e) => {
 });
 function renderRefs() {
   $('#ref-list').innerHTML = state.refs.map((r, i) => `<span class="ref"><img src="${r.data}" alt="" /><button data-rmref="${i}" aria-label="Remove">✕</button></span>`).join('');
-  $('.ref-add').hidden = state.refs.length >= 3;
+  $('#mood-zone').classList.toggle('has', state.refs.length > 0);
+  if (typeof moodDirty !== 'undefined') { moodDirty = state.refs.length > 0; $('#mood-apply').hidden = !moodDirty || !state.concepts.length; }
 }
 $('#ref-list').onclick = (e) => { const i = e.target.dataset.rmref; if (i != null) { state.refs.splice(+i, 1); renderRefs(); } };
 
@@ -230,9 +234,7 @@ async function generate(opts = {}) {
   await applyPlan(plans[0], { keepUploaded: hasLogo });
   markChosen(0);
   btn.disabled = false; btn.textContent = '✦ Design 3 new concepts'; $('#busy').hidden = true;
-  $('#chat').hidden = false;
-  if (note) chat('bot', note);
-  chat('bot', `Here are 3 directions for <b>${esc(plans[0].name)}</b>. Pick one, then tell me what to change — or ask <i>why</i> I chose something. Everything is also editable in Product, Design and Look.`);
+  say(`${note ? esc(note) + '<br>' : ''}Here are 3 directions for <b>${esc(plans[0].name)}</b> — pick one on the left, then tell me here what to change.`);
 }
 $('#generate').onclick = () => generate();
 $('#brief').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generate(); });
@@ -262,28 +264,87 @@ $('#concepts').onclick = async (e) => {
   if (matchMedia('(max-width: 899px)').matches) scrollTo({ top: 0, behavior: 'smooth' });
 };
 
-// chat: refine or explain
-function chat(who, html) { const log = $('#chat-log'); log.insertAdjacentHTML('beforeend', `<p class="${who}">${html}</p>`); log.scrollTop = log.scrollHeight; }
-$('#chat-form').onsubmit = async (e) => {
-  e.preventDefault();
-  const q = $('#chat-input').value.trim(); if (!q) return;
-  $('#chat-input').value = ''; chat('me', esc(q));
+// ---------- Ask Wrapt: the main way to change things ----------
+const CHIPS = ['More premium', 'More playful', 'Bigger logo', 'Try a different pack', 'Warmer colours', 'Use my mood photos', 'Why these colours?'];
+$('#ask-chips').innerHTML = CHIPS.map((c) => `<button type="button" data-chip="${c}">${c}</button>`).join('');
+let sayT;
+function say(html, { typing = false } = {}) {
+  const r = $('#ask-reply'); r.hidden = false; r.classList.toggle('typing', typing); r.innerHTML = typing ? '<i></i><i></i><i></i>' : `${html}<button type="button" class="x" aria-label="Close">✕</button>`;
+  clearTimeout(sayT); if (!typing) sayT = setTimeout(() => (r.hidden = true), 14000);
+}
+const chat = (who, html) => { if (who !== 'me') say(html, { typing: who.includes('typing') }); };
+$('#ask-reply').addEventListener('click', (e) => { if (e.target.closest('.x')) $('#ask-reply').hidden = true; });
+$('#ask-chips').addEventListener('click', (e) => { const c = e.target.dataset.chip; if (c) { $('#ask-input').value = c; $('#ask-form').requestSubmit(); } });
+$('#ask-file').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (state.refs.length >= 3) state.refs.shift();
+  state.refs.push(await shrinkData(f)); renderRefs();
+  say('Photo added to your mood board. Tell me what you like about it — or tap <b>Apply mood</b> in the left panel.');
+});
+async function ask(q) {
   const plan = planFromState();
   const asking = /^(why|what|how|which|kyu|kyon|explain)\b/i.test(q) || q.endsWith('?');
-  chat('bot typing', '…');
-  let res = aiMode === 'ai' ? await askAI(asking ? { mode: 'explain', plan, question: q } : { mode: 'refine', plan, instruction: q }) : null;
-  $('#chat-log .typing')?.remove();
-  if (asking) {
-    if (res?.answer) chat('bot', esc(res.answer));
-    else chat('bot', reasonHtml(plan.reasoning?.colour ? plan : (state.plan || plan)) || 'I picked these to keep the pack readable and on-brand.');
-    return;
+  const moodish = /mood|photo|picture|image|inspir|reference|like (this|that|it)|similar/i.test(q);
+  if (moodish && !asking) {
+    if (!state.refs.length) { say('Add a mood photo first — use the ＋ in this bar or the Mood board on the left.'); return; }
+    return applyMood(q);
   }
+  say('', { typing: true });
+  const res = aiMode === 'ai' ? await askAI(asking ? { mode: 'explain', plan, question: q } : { mode: 'refine', plan, instruction: q, images: state.refs.map((r) => r.data) }) : null;
+  if (asking) { say(res?.answer ? esc(res.answer) : reasonHtml(plan.reasoning?.colour ? plan : (state.plan || plan)) || 'I picked these to keep the pack readable and on-brand.'); return; }
   let next, note;
   if (res?.plan) { next = normalizePlan(res.plan); note = res.note; }
-  else ({ plan: next, note } = refineLocally(plan, q));
+  else {
+    ({ plan: next, note } = refineLocally(plan, q));
+    if (/couldn't|could not/i.test(note || '')) { say(aiMode === 'ai' ? 'The AI didn’t answer just now — try again in a moment, or use words like <i>premium</i>, <i>playful</i>, <i>bigger logo</i>, a colour or a pack name.' : esc(note)); return; }
+  }
   next.reasoning = next.reasoning?.colour ? next.reasoning : plan.reasoning;
   await applyPlan(next, { keepUploaded: state.brand.logoSource === 'upload' });
-  chat('bot', esc(note || 'Updated.'));
+  say(esc(note || 'Done.'));
+}
+$('#ask-form').onsubmit = (e) => { e.preventDefault(); const q = $('#ask-input').value.trim(); if (!q) return; $('#ask-input').value = ''; ask(q); };
+
+// ---------- mood board: drop photos, then Apply to redesign from them ----------
+let moodDirty = false;
+async function applyMood(extra = '') {
+  if (!state.refs.length) return;
+  moodDirty = false; $('#mood-apply').hidden = true;
+  const colors = state.refs.flatMap((r) => r.colors || []).slice(0, 2);
+  await generate({ brief: `${$('#brief').value} Take the look and feel from their mood photos (colours, mood, style). ${extra}`.trim(), name: state.logoLocked ? state.brand.logoSpec?.name : state.brand.name, colors });
+}
+$('#mood-apply').onclick = () => applyMood();
+// ---------- logo drop zone: drop, check, then Apply ----------
+let pendingLogo = null;
+async function stageLogo(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  pendingLogo = { img: await fileToImage(file), name: file.name.replace(/\.[^.]+$/, '') };
+  const pc = $('#logo-preview'), g = pc.getContext('2d'); g.clearRect(0, 0, pc.width, pc.height);
+  const im = pendingLogo.img, k = Math.min(pc.width / im.width, pc.height / im.height) * 0.86; g.drawImage(im, (pc.width - im.width * k) / 2, (pc.height - im.height * k) / 2, im.width * k, im.height * k);
+  $('#logo-pending').hidden = false; $('#logo-zone-body').hidden = true; $('#logo-zone').classList.add('pending');
+}
+function unstageLogo() { pendingLogo = null; $('#logo-pending').hidden = true; $('#logo-zone-body').hidden = false; $('#logo-zone').classList.remove('pending'); refreshLogo(); }
+$('#logo-apply').onclick = async () => { const p = pendingLogo; unstageLogo(); if (p) { state.logoLocked = false; await useUploadedLogo(p.img, state.brand.name || p.name); toast('Logo applied'); } };
+$('#logo-cancel').onclick = unstageLogo;
+for (const [zone, fn] of [['#logo-zone', (fs) => stageLogo(fs[0])], ['#mood-zone', async (fs) => { for (const f of fs.filter((x) => x.type.startsWith('image/')).slice(0, 3)) { if (state.refs.length >= 3) state.refs.shift(); state.refs.push(await shrinkData(f)); } renderRefs(); }]]) {
+  const z = $(zone);
+  z.addEventListener('dragover', (e) => { e.preventDefault(); z.classList.add('over'); });
+  z.addEventListener('dragleave', () => z.classList.remove('over'));
+  z.addEventListener('drop', (e) => { e.preventDefault(); e.stopPropagation(); z.classList.remove('over'); fn([...e.dataTransfer.files]); });
+}
+// dropping a file anywhere else does nothing (no surprise logo changes)
+addEventListener('dragover', (e) => e.preventDefault());
+addEventListener('drop', (e) => e.preventDefault());
+
+// ---------- artwork editor ----------
+function faceInfo() {
+  const P = state.product, d = state.dims[P], A = printArea(P, d);
+  if (A.kind === 'wrap') return { aspect: A.w / 2 / A.h, wrap: true };
+  if (P === 'box') return { aspect: d.w / d.h, wrap: false };
+  return { aspect: A.w / A.h, wrap: false };
+}
+$('#edit-art').onclick = () => {
+  const f = faceInfo();
+  openEditor({ brand: state.brand, ...f, onDone: (layers) => { state.brand.layers = layers; syncInputs(); rebuild(true); toast(layers.length ? 'Artwork applied to the pack' : 'Artwork cleared'); } });
 };
 
 // ---------- inputs ----------
@@ -401,7 +462,7 @@ async function useUploadedLogo(img, name) {
 }
 $('#logo-file').addEventListener('change', async (e) => {
   const f = e.target.files[0]; if (!f) return;
-  await useUploadedLogo(await fileToImage(f), state.brand.name || f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '));
+  await stageLogo(f); // preview first — nothing changes until they tap Apply
   e.target.value = '';
 });
 // Logo Studio from the sidebar: edit the current logo (or start one)
@@ -415,14 +476,6 @@ $('#border-file').addEventListener('change', async (e) => { const f = e.target.f
 $('#art-file').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; state.brand.artwork = await fileToImage(f); e.target.value = ''; syncInputs(); rebuild(true); });
 $('#clear-art').addEventListener('click', () => { state.brand.artwork = null; syncInputs(); rebuild(true); });
 $('#template').addEventListener('click', () => templateFor(state.product, state.dims[state.product]).toBlob((b) => download(b, `wrapt-${state.product}-template.png`)));
-addEventListener('dragover', (e) => { e.preventDefault(); document.body.classList.add('dropping'); });
-addEventListener('dragleave', (e) => { if (!e.relatedTarget) document.body.classList.remove('dropping'); });
-addEventListener('drop', async (e) => {
-  e.preventDefault(); document.body.classList.remove('dropping');
-  const f = e.dataTransfer.files[0]; if (!f || !f.type.startsWith('image/')) return;
-  await useUploadedLogo(await fileToImage(f), state.brand.name || f.name.replace(/\.[^.]+$/, ''));
-});
-
 // ---------- export ----------
 const SIZES = { square: [1080, 1080], post: [1080, 1350], story: [1080, 1920], wide: [1920, 1080], hd: [2160, 2160] };
 function download(blob, name) {
@@ -591,7 +644,9 @@ async function loadDsert() {
 }
 renderRefs();
 initLogoStudio();
+initEditor();
 document.fonts.ready.then(async () => {
+  await loadGenFonts();
   // a neutral demo brand sits behind the start screen (made by the built-in designer)
   const demo = designLocally("Premium masala chai called 'Kesar Chai' — warm, traditional")[0];
   await applyPlan({ ...demo, product: 'pouch' }, { keepUploaded: false });

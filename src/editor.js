@@ -1,0 +1,165 @@
+// Artwork editor: add your own text, paragraphs, shapes, icons and images on top of the
+// AI design — on the front or the back — then drag, resize and rotate them.
+import { paintFace, FONTS, SHAPE_PATHS, ink, paper } from './art.js';
+import { GLYPHS } from './logo.js';
+
+const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const uid = () => Math.random().toString(36).slice(2, 9);
+const SHAPES = { rect: 'Rectangle', round: 'Rounded', circle: 'Circle', line: 'Line', star: 'Star', badge: 'Badge', heart: 'Heart', arrow: 'Arrow', ribbon: 'Ribbon' };
+const ICONS = ['leaf', 'sprout', 'sun', 'drop', 'flame', 'heart', 'star', 'wheat', 'cup', 'bean', 'lotus', 'moon', 'spark', 'gem', 'paw', 'wave', 'mountain', 'cherry', 'citrus', 'chilli', 'bee', 'whisk', 'cupcake', 'dot'];
+
+let E = null; // { brand, layers, face, aspect, wrap, sel, onDone, onCancel }
+
+export function openEditor({ brand, aspect, wrap, face = 'front', onDone }) {
+  E = { brand, layers: (brand.layers || []).map((l) => ({ ...l })), face, aspect, wrap, sel: null, onDone };
+  $('#editor').showModal();
+  setFace(face);
+}
+
+function b2() { return { ...E.brand, layers: E.layers, _wrapK: E.wrap ? 0.66 : 1, artwork: null }; }
+let raf = 0;
+function render() {
+  cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(() => {
+    const c = $('#ed-canvas'), box = $('#ed-stage').getBoundingClientRect();
+    const maxW = box.width - 40, maxH = box.height - 40;
+    let cw = maxW, ch = cw / E.aspect; if (ch > maxH) { ch = maxH; cw = ch * E.aspect; }
+    c.style.width = `${cw}px`; c.style.height = `${ch}px`;
+    const W = Math.round(Math.min(1400, cw * 2)), art = paintFace(b2(), E.face, E.aspect, W);
+    c.width = art.width; c.height = art.height; c.getContext('2d').drawImage(art, 0, 0);
+    $('#ed-safe').hidden = !E.wrap;
+    const r = c.getBoundingClientRect(), sr = $('#ed-stage').getBoundingClientRect();
+    Object.assign($('#ed-over').style, { left: `${r.left - sr.left}px`, top: `${r.top - sr.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    drawSel();
+  });
+}
+function drawSel() {
+  const l = E.layers.find((x) => x.id === E.sel), s = $('#ed-sel');
+  if (!l || l.face !== E.face) { s.hidden = true; return; }
+  const o = $('#ed-over').getBoundingClientRect(), w = l.w * o.width, h = (l.h ?? 0.1) * o.height;
+  s.hidden = false;
+  Object.assign(s.style, { left: `${l.x * o.width - w / 2}px`, top: `${l.y * o.height - h / 2}px`, width: `${w}px`, height: `${h}px`, transform: `rotate(${l.rot || 0}deg)` });
+}
+function setFace(f) {
+  E.face = f; E.sel = null;
+  $$('[data-edface]').forEach((b) => b.classList.toggle('on', b.dataset.edface === f));
+  render(); props(); layerList();
+}
+function add(l) {
+  l = { id: uid(), face: E.face, x: 0.5, y: 0.5, rot: 0, opacity: 1, ...l };
+  E.layers.push(l); E.sel = l.id; render(); props(); layerList();
+}
+const brandCols = () => [...new Set([ink(E.brand), E.brand.accent, E.brand.pack, paper(E.brand), '#ffffff', '#1c1a17'])];
+
+function layerList() {
+  const ls = E.layers.filter((l) => l.face === E.face);
+  $('#ed-layers').innerHTML = ls.length
+    ? ls.slice().reverse().map((l) => `<button type="button" data-edlayer="${l.id}" class="${l.id === E.sel ? 'on' : ''}"><span>${l.type === 'text' ? '𝐓' : l.type === 'image' ? '🖼' : l.type === 'icon' ? '✦' : '◼'}</span>${esc(l.type === 'text' ? (l.text || '').slice(0, 22) || 'Text' : l.type === 'shape' ? SHAPES[l.shape] : l.type === 'icon' ? l.name : 'Image')}</button>`).join('')
+    : '<p class="ed-empty">Nothing added on this side yet. Use the tools on the left.</p>';
+}
+function props() {
+  const l = E.layers.find((x) => x.id === E.sel), P = $('#ed-props');
+  if (!l) { P.innerHTML = '<p class="ed-empty">Select something on the pack to change it — or add text, shapes, icons and images from the left.</p>'; return; }
+  const sw = (key) => `<div class="ed-sw">${brandCols().map((c) => `<button type="button" style="--c:${c}" data-edset="${key}" data-v="${c}" class="${l[key] === c ? 'on' : ''}"></button>`).join('')}<input type="color" data-edin="${key}" value="${/^#[0-9a-f]{6}$/i.test(l[key] || '') ? l[key] : '#1c1a17'}"/></div>`;
+  let h = '';
+  if (l.type === 'text') h += `
+    <label class="ed-f"><span>Text</span><textarea data-edin="text" rows="${l.para ? 5 : 2}">${esc(l.text)}</textarea></label>
+    <label class="ed-f"><span>Font</span><select data-edin="font">${Object.keys(FONTS).map((f) => `<option ${f === l.font ? 'selected' : ''}>${f}</option>`).join('')}</select></label>
+    <div class="ed-row"><div class="seg">${[['left', '⟸'], ['center', '≡'], ['right', '⟹']].map(([k, v]) => `<button type="button" data-edset="align" data-v="${k}" class="${(l.align || 'center') === k ? 'on' : ''}">${v}</button>`).join('')}</div>
+      <div class="seg"><button type="button" data-edtog="weight" class="${l.weight >= 700 ? 'on' : ''}"><b>B</b></button><button type="button" data-edtog="upper" class="${l.upper ? 'on' : ''}">AA</button></div></div>
+    <label class="ed-f"><span>Size</span><input type="range" min="0.015" max="0.2" step="0.002" value="${l.size}" data-edin="size"/></label>
+    <label class="ed-f"><span>Letter spacing</span><input type="range" min="-0.05" max="0.4" step="0.01" value="${l.spacing || 0}" data-edin="spacing"/></label>
+    <div class="ed-f"><span>Colour</span>${sw('color')}</div>`;
+  if (l.type === 'shape') h += `
+    <div class="ed-f"><span>Shape</span><div class="chips">${Object.entries(SHAPES).map(([k, v]) => `<button type="button" data-edset="shape" data-v="${k}" class="${l.shape === k ? 'on' : ''}">${v}</button>`).join('')}</div></div>
+    <div class="ed-f"><span>Fill</span>${sw('fill')}<button type="button" class="link small" data-edset="fill" data-v="none">No fill</button></div>
+    <label class="ed-f"><span>Outline</span><input type="range" min="0" max="3" step="0.1" value="${l.sw || 0}" data-edin="sw"/></label>
+    ${l.sw ? `<div class="ed-f"><span>Outline colour</span>${sw('stroke')}</div>` : ''}`;
+  if (l.type === 'icon') h += `<div class="ed-f"><span>Colour</span>${sw('color')}</div><label class="ed-f"><span>Line weight</span><input type="range" min="0.8" max="3.5" step="0.1" value="${l.sw ?? 1.8}" data-edin="sw"/></label>`;
+  if (l.type === 'image') h += `<label class="check"><input type="checkbox" data-edtogc="round" ${l.round ? 'checked' : ''}/><span>Rounded corners</span></label>`;
+  h += `
+    <label class="ed-f"><span>Rotate</span><input type="range" min="-180" max="180" step="1" value="${l.rot || 0}" data-edin="rot"/></label>
+    <label class="ed-f"><span>Opacity</span><input type="range" min="0.1" max="1" step="0.05" value="${l.opacity ?? 1}" data-edin="opacity"/></label>
+    <div class="ed-acts"><button type="button" class="ghost small" data-edact="up">↑ Forward</button><button type="button" class="ghost small" data-edact="down">↓ Back</button><button type="button" class="ghost small" data-edact="dup">Duplicate</button><button type="button" class="ghost small danger" data-edact="del">Delete</button></div>`;
+  P.innerHTML = h;
+}
+const num = (k) => ['size', 'spacing', 'sw', 'rot', 'opacity'].includes(k);
+
+export function initEditor() {
+  const dlg = $('#editor');
+  $('#ed-icons').innerHTML = ICONS.map((k) => `<button type="button" data-edicon="${k}" title="${k}"><svg viewBox="0 0 24 24"><path d="${GLYPHS[k]}"/></svg></button>`).join('');
+  $('#ed-shapes').innerHTML = Object.entries(SHAPES).map(([k, v]) => `<button type="button" data-edshape="${k}" title="${v}"><svg viewBox="-12 -12 24 24"><path d="${k === 'rect' ? 'M-9 -7h18v14h-18z' : k === 'round' ? 'M-6 -7h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3h-12a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3z' : k === 'circle' ? 'M-8 0a8 8 0 1 0 16 0a8 8 0 1 0-16 0' : k === 'line' ? 'M-9 0H9' : SHAPE_PATHS[k](18, 16)}"/></svg></button>`).join('');
+  dlg.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
+    if (d.edface) setFace(d.edface);
+    if (d.edadd === 'heading') add({ type: 'text', text: E.face === 'front' ? 'New!' : E.brand.name, font: E.brand.fonts?.display, size: 0.07, weight: 700, w: 0.7, h: 0.1, color: ink(E.brand), align: 'center' });
+    if (d.edadd === 'para') add({ type: 'text', para: true, text: 'Ingredients: …\nNet wt. 250 g · Store in a cool, dry place.\nMade with love in India.', font: E.brand.fonts?.body || 'Inter', size: 0.03, weight: 400, w: 0.72, h: 0.22, y: 0.72, color: ink(E.brand), align: 'left', lead: 1.35 });
+    if (d.edadd === 'badge') add({ type: 'text', text: '100% NATURAL', font: E.brand.fonts?.body || 'Inter', size: 0.032, weight: 700, upper: true, spacing: 0.12, w: 0.5, h: 0.06, y: 0.2, color: E.brand.accent, align: 'center' });
+    if (d.edshape) add({ type: 'shape', shape: d.edshape, fill: E.brand.accent, w: d.edshape === 'line' ? 0.5 : 0.3, h: d.edshape === 'line' ? 0.006 : 0.2 * E.aspect });
+    if (d.edicon) add({ type: 'icon', name: d.edicon, d: GLYPHS[d.edicon], color: ink(E.brand), w: 0.18, h: 0.18 * E.aspect, sw: 1.8 });
+    if (d.edlayer) { E.sel = d.edlayer; drawSel(); props(); layerList(); }
+    if (d.edset) { const l = E.layers.find((x) => x.id === E.sel); if (l) { l[d.edset] = d.v; render(); props(); } }
+    if (d.edtog) { const l = E.layers.find((x) => x.id === E.sel); if (l) { if (d.edtog === 'weight') l.weight = l.weight >= 700 ? 400 : 700; else l[d.edtog] = !l[d.edtog]; render(); props(); } }
+    if (d.edact) {
+      const i = E.layers.findIndex((x) => x.id === E.sel); if (i < 0) return; const l = E.layers[i];
+      if (d.edact === 'del') { E.layers.splice(i, 1); E.sel = null; }
+      if (d.edact === 'dup') { const c = { ...l, id: uid(), x: Math.min(0.9, l.x + 0.04), y: Math.min(0.9, l.y + 0.04) }; E.layers.splice(i + 1, 0, c); E.sel = c.id; }
+      if (d.edact === 'up' && i < E.layers.length - 1) [E.layers[i], E.layers[i + 1]] = [E.layers[i + 1], E.layers[i]];
+      if (d.edact === 'down' && i > 0) [E.layers[i], E.layers[i - 1]] = [E.layers[i - 1], E.layers[i]];
+      render(); props(); layerList();
+    }
+  });
+  dlg.addEventListener('input', (e) => {
+    const t = e.target, k = t.dataset.edin; if (!k) return;
+    const l = E.layers.find((x) => x.id === E.sel); if (!l) return;
+    l[k] = num(k) ? +t.value : t.value; render(); if (k === 'text') layerList();
+  });
+  dlg.addEventListener('change', (e) => { const t = e.target; if (t.dataset.edtogc) { const l = E.layers.find((x) => x.id === E.sel); if (l) { l[t.dataset.edtogc] = t.checked; render(); } } });
+  $('#ed-img').addEventListener('change', async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    const img = new Image(); img.src = URL.createObjectURL(f); await img.decode();
+    const a = img.width / img.height, w = 0.4, h = (w / a) * E.aspect;
+    add({ type: 'image', img, w, h });
+  });
+  // select / move / resize / rotate on the canvas
+  const over = $('#ed-over');
+  let drag = null;
+  const pt = (e) => { const r = over.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, r }; };
+  over.addEventListener('pointerdown', (e) => {
+    const p = pt(e), handle = e.target.dataset.h;
+    let l = E.layers.find((x) => x.id === E.sel);
+    if (!handle) {
+      const hit = E.layers.filter((x) => x.face === E.face).reverse().find((x) => Math.abs(p.x - x.x) < x.w / 2 + 0.01 && Math.abs(p.y - x.y) < (x.h ?? 0.1) / 2 + 0.01);
+      E.sel = hit?.id || null; l = hit; props(); layerList(); drawSel();
+      if (!hit) return;
+    }
+    over.setPointerCapture(e.pointerId);
+    drag = { mode: handle || 'move', start: p, orig: { ...l } };
+  });
+  over.addEventListener('pointermove', (e) => {
+    if (!drag) return; const l = E.layers.find((x) => x.id === E.sel); if (!l) return;
+    const p = pt(e), o = drag.orig;
+    if (drag.mode === 'move') { l.x = Math.min(1, Math.max(0, o.x + p.x - drag.start.x)); l.y = Math.min(1, Math.max(0, o.y + p.y - drag.start.y)); }
+    else if (drag.mode === 'rot') { l.rot = Math.round((Math.atan2(p.y * p.r.height - l.y * p.r.height, p.x * p.r.width - l.x * p.r.width) * 180) / Math.PI + 90); }
+    else { // corner resize, from the centre
+      const sx = Math.abs(p.x - l.x) / Math.max(0.001, Math.abs(drag.start.x - o.x)), sy = Math.abs(p.y - l.y) / Math.max(0.001, Math.abs(drag.start.y - o.y));
+      const keep = l.type !== 'shape' || e.shiftKey, s = keep ? Math.max(sx, sy) : 1;
+      l.w = Math.max(0.03, o.w * (keep ? s : sx)); l.h = Math.max(0.01, (o.h ?? 0.1) * (keep ? s : sy));
+      if (l.type === 'text') l.size = Math.max(0.012, o.size * (keep ? s : 1));
+    }
+    render();
+  });
+  over.addEventListener('pointerup', () => { drag = null; props(); });
+  addEventListener('keydown', (e) => {
+    if (!dlg.open || !E?.sel || /input|textarea|select/i.test(document.activeElement?.tagName)) return;
+    const l = E.layers.find((x) => x.id === E.sel); if (!l) return;
+    if (e.key === 'Delete' || e.key === 'Backspace') { E.layers = E.layers.filter((x) => x !== l); E.sel = null; render(); props(); layerList(); e.preventDefault(); }
+    const st = e.shiftKey ? 0.02 : 0.004;
+    if (e.key === 'ArrowLeft') l.x -= st; if (e.key === 'ArrowRight') l.x += st; if (e.key === 'ArrowUp') l.y -= st; if (e.key === 'ArrowDown') l.y += st;
+    if (e.key.startsWith('Arrow')) { e.preventDefault(); render(); }
+  });
+  addEventListener('resize', () => { if (dlg.open) render(); });
+  $('#ed-done').onclick = () => { const f = E.onDone; dlg.close(); f?.(E.layers); };
+  $('#ed-cancel').onclick = () => dlg.close();
+}
