@@ -375,7 +375,7 @@ export function borderTile(b, type, W = 64, H = 84) {
 
 // ---------- centre designs: a shape behind the logo that changes the whole feel ----------
 export const CENTRES = { none: 'None', spotlight: 'Spotlight', frame: 'Label panel', arch: 'Arch', seal: 'Seal', sunburst: 'Sunburst', band: 'Band', sash: 'Diagonal', block: 'Colour block', split: 'Split', bigtype: 'Big type', halftone: 'Halftone' };
-const LOGO_Y = { classic: 0.44, bold: 0.38, minimal: 0.5, heritage: 0.46 };
+const LOGO_Y = { classic: 0.44, bold: 0.36, poster: 0.36, label: 0.42, monogram: 0.39, editorial: 0.3, minimal: 0.5, heritage: 0.46 };
 function paintCentre(g, x, y, w, h, b, s) {
   const t = b.centre || 'none'; if (t === 'none') return;
   const pap = paper(b), dark = isDark(pap);
@@ -433,8 +433,8 @@ export const paper = (b) => (b.style === 'minimal' ? mix(b.pack, '#ffffff', 0.9)
 export const ink = (b) => (b.style === 'minimal' ? readable(b.pack, paper(b), 4.5) : b.ink || autoInk(paper(b)));
 const accentOn = (b) => readable(b.accent, paper(b), 2.2);
 
-function drawLogo(g, b, cx, cy, size) {
-  const logo = b.logo; if (!logo) return;
+function drawLogo(g, b, cx, cy, size, bg) {
+  const logo = (bg && b.logoOn?.(bg)) || b.logo; if (!logo) return;
   size *= b.logoScale ?? 1;
   if (b.logoPlate) {
     const plate = isDark(paper(b)) ? '#fbf6ee' : '#1c1a17';
@@ -458,18 +458,76 @@ function paintPanel(g, x, y, w, h, role, b) {
   const ly = (b.logoY ?? 0) * h;
   const side = (str, size, col, opts) => { g.save(); g.translate(cx, cy); g.rotate(-Math.PI / 2); text(g, str, 0, 0, size, col, { maxW: h * 0.85, ...opts }); g.restore(); };
 
-  if (b.style === 'bold') {
-    g.fillStyle = b.accent;
-    g.beginPath(); g.moveTo(x, y + h * 0.72); g.lineTo(x + w, y + h * 0.52); g.lineTo(x + w, y + h * 0.66); g.lineTo(x, y + h * 0.86); g.fill();
+  const st = b.style === 'bold' ? 'poster' : b.style; // the old diagonal "bold" layout is retired
+  const backRole = () => { // shared, calm back panel for the newer layouts
+    drawLogo(g, b, cx, y + h * 0.28, s * 0.34);
+    text(g, b.tagline, cx, y + h * 0.5, s * 0.055 * ts, ac, { font: disp, weight: 400, maxW: w * 0.8 * wk });
+    text(g, b.detail, cx, y + h * 0.62, s * 0.036 * ts, fg, { font: body, weight: 500, maxW: w * 0.8 * wk });
+  };
+  if (st === 'poster') {
+    // clean split: logo on the pack colour, a solid colour block below with the words
+    const top = y + h * 0.64, blk = b.accent, on = autoInk(blk) === '#1c1a17' ? '#1c1a17' : '#fbf7ef';
+    g.fillStyle = blk; g.fillRect(x, top, w, y + h - top);
+    g.fillStyle = mix(blk, '#000', 0.18); g.fillRect(x, top, w, s * 0.012);
     if (role === 'front') {
-      drawLogo(g, b, cx, y + h * 0.38 + ly, s * 0.8);
-      text(g, b.tagline.toUpperCase(), cx, y + h * 0.93, s * 0.045 * ts, fg, { font: body, spacing: s * 0.006, maxW: w * 0.9 * wk });
-    } else if (role === 'back') {
-      drawLogo(g, b, cx, y + h * 0.26, s * 0.36);
-      text(g, b.tagline, cx, y + h * 0.48, s * 0.05 * ts, fg, { font: body, weight: 500, maxW: w * 0.85 * wk });
-      text(g, b.detail, cx, y + h * 0.94, s * 0.04 * ts, fg, { font: body, weight: 500, maxW: w * 0.85 * wk });
-    } else if (role === 'side') side(b.name.toUpperCase(), Math.min(w * 0.42, h * 0.11) * ts, fg, { font: disp, weight: 800, spacing: 4 });
-    else drawLogo(g, b, cx, cy, s * 0.7);
+      drawLogo(g, b, cx, y + h * 0.36 + ly, s * 0.64);
+      text(g, b.tagline.toUpperCase(), cx, top + (y + h - top) * 0.4, s * 0.05 * ts, on, { font: body, weight: 700, spacing: s * 0.006, maxW: w * 0.84 * wk });
+      text(g, b.detail, cx, top + (y + h - top) * 0.7, s * 0.036 * ts, on, { font: body, weight: 500, maxW: w * 0.84 * wk });
+    } else if (role === 'back') { drawLogo(g, b, cx, y + h * 0.3, s * 0.34); text(g, b.tagline, cx, y + h * 0.5, s * 0.05 * ts, fg, { font: disp, maxW: w * 0.8 * wk }); text(g, b.detail, cx, top + (y + h - top) * 0.5, s * 0.038 * ts, on, { font: body, weight: 500, maxW: w * 0.84 * wk }); }
+    else if (role === 'side') side(b.name.toUpperCase(), Math.min(w * 0.36, h * 0.09) * ts, ac, { font: disp, weight: 700, spacing: 4 });
+    else drawLogo(g, b, cx, cy, s * 0.62);
+  } else if (st === 'label') {
+    // a classic jar-style oval label sitting on the pack colour
+    const lw = Math.min(w * 0.78 * wk, s * 0.92), lh = Math.min(h * 0.62, lw * 0.82), lcy = y + h * 0.46;
+    const lab = isDark(paper(b)) ? '#fbf6ec' : mix(paper(b), '#ffffff', 0.75);
+    g.fillStyle = lab; g.beginPath(); g.ellipse(cx, lcy, lw / 2, lh / 2, 0, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = b.accent; g.lineWidth = s * 0.008; g.beginPath(); g.ellipse(cx, lcy, lw / 2 - s * 0.02, lh / 2 - s * 0.02, 0, 0, Math.PI * 2); g.stroke();
+    g.lineWidth = s * 0.003; g.beginPath(); g.ellipse(cx, lcy, lw / 2 - s * 0.034, lh / 2 - s * 0.034, 0, 0, Math.PI * 2); g.stroke();
+    const lf = autoInk(lab) === '#1c1a17' ? readable(b.accent, lab, 3) : '#1c1a17';
+    if (role === 'front') {
+      drawLogo(g, b, cx, lcy - lh * 0.06 + ly, Math.min(lw, lh) * 0.66, lab);
+      text(g, b.tagline, cx, lcy + lh * 0.3, s * 0.038 * ts, lf, { font: disp, italic: true, maxW: lw * 0.7 });
+      text(g, b.detail.toUpperCase(), cx, y + h * 0.88, s * 0.032 * ts, fg, { font: body, weight: 600, spacing: s * 0.006, maxW: w * 0.84 * wk });
+    } else if (role === 'back') { text(g, b.tagline, cx, lcy - lh * 0.08, s * 0.05 * ts, lf, { font: disp, maxW: lw * 0.72 }); text(g, b.detail, cx, lcy + lh * 0.12, s * 0.036 * ts, lf, { font: body, weight: 500, maxW: lw * 0.72 }); }
+    else if (role === 'side') side(b.name, Math.min(w * 0.34, h * 0.09) * ts, ac, { font: disp });
+    else drawLogo(g, b, cx, cy, s * 0.6);
+  } else if (st === 'monogram') {
+    // their own logo, tiny and repeated: a signature pattern no other brand has
+    if (b.logo) {
+      const t = s * 0.13, lg = b.logo, k = t / Math.max(lg.width, lg.height);
+      g.save(); g.globalAlpha = isDark(paper(b)) ? 0.16 : 0.13; g.translate(cx, cy); g.rotate(-0.2);
+      const R = Math.hypot(w, h);
+      for (let yy = -R, r = 0; yy < R; yy += t * 1.25, r++) for (let xx = -R + (r % 2) * t * 0.7; xx < R; xx += t * 1.4) g.drawImage(lg, xx, yy, lg.width * k, lg.height * k);
+      g.restore();
+    }
+    if (role === 'front') {
+      const pw = Math.min(w * 0.66 * wk, s * 0.84), ph = h * 0.5;
+      g.fillStyle = paper(b); g.beginPath(); g.roundRect(cx - pw / 2, y + h * 0.42 - ph / 2, pw, ph, s * 0.04); g.fill();
+      g.strokeStyle = b.accent; g.lineWidth = s * 0.006; g.stroke();
+      drawLogo(g, b, cx, y + h * 0.39 + ly, Math.min(pw, ph) * 0.66);
+      text(g, b.tagline.toUpperCase(), cx, y + h * 0.42 + ph * 0.36, s * 0.032 * ts, ac, { font: body, weight: 700, spacing: s * 0.006, maxW: pw * 0.85 });
+      text(g, b.detail, cx, y + h * 0.86, s * 0.034 * ts, fg, { font: body, weight: 500, maxW: w * 0.8 * wk });
+    } else if (role === 'back') backRole();
+    else if (role === 'side') side(b.name, Math.min(w * 0.34, h * 0.09) * ts, ac, { font: disp });
+    else drawLogo(g, b, cx, cy, s * 0.6);
+  } else if (st === 'editorial') {
+    // magazine-cover type: the name set huge, a small lockup and fine rules
+    if (role === 'front') {
+      text(g, b.detail.toUpperCase(), cx, y + h * 0.09, s * 0.028 * ts, fg, { font: body, weight: 600, spacing: s * 0.01, maxW: w * 0.8 * wk });
+      g.fillStyle = fg; g.fillRect(cx - w * 0.36 * wk, y + h * 0.13, w * 0.72 * wk, Math.max(1, s * 0.003));
+      if (b.logoHasName) {
+        drawLogo(g, b, cx, y + h * 0.48 + ly, s * 0.74);
+      } else {
+      drawLogo(g, b, cx, y + h * 0.3 + ly, s * 0.34);
+      const words = String(b.name || '').split(/\s+/).slice(0, 2), lines = words.length > 1 ? words : [words[0]];
+      const big = Math.min(h * 0.2, (w * 0.9 * wk) / Math.max(...lines.map((l) => Math.max(1, l.length))) * 1.55);
+      lines.forEach((ln, i) => text(g, ln, cx, y + h * (lines.length > 1 ? 0.56 : 0.62) + i * big * 0.92, big, ac, { font: disp, weight: 700, maxW: w * 0.94 * wk }));
+      }
+      g.fillStyle = fg; g.fillRect(cx - w * 0.36 * wk, y + h * 0.84, w * 0.72 * wk, Math.max(1, s * 0.003));
+      text(g, b.tagline, cx, y + h * 0.9, s * 0.036 * ts, fg, { font: disp, italic: true, maxW: w * 0.8 * wk });
+    } else if (role === 'back') backRole();
+    else if (role === 'side') side(b.name.toUpperCase(), Math.min(w * 0.36, h * 0.1) * ts, ac, { font: disp, weight: 700 });
+    else drawLogo(g, b, cx, cy, s * 0.6);
   } else if (b.style === 'minimal') {
     g.fillStyle = b.accent; g.fillRect(x, y + h - h * 0.06, w, h * 0.06);
     if (role === 'front') {
@@ -519,7 +577,29 @@ export const SHAPE_PATHS = {
   badge: (w, h) => { let d = ''; const n = 24; for (let i = 0; i <= n * 2; i++) { const a = (i / (n * 2)) * Math.PI * 2, r = i % 2 ? 0.9 : 1; d += `${i ? 'L' : 'M'}${(Math.cos(a) * r * w) / 2} ${(Math.sin(a) * r * h) / 2}`; } return d + 'Z'; },
   arrow: (w, h) => `M${-w / 2} ${-h * 0.15}H${w * 0.15}V${-h / 2}L${w / 2} 0L${w * 0.15} ${h / 2}V${h * 0.15}H${-w / 2}Z`,
   ribbon: (w, h) => `M${-w / 2} ${-h / 2}H${w / 2}L${w * 0.42} 0L${w / 2} ${h / 2}H${-w / 2}L${-w * 0.42} 0Z`,
+  pill: (w, h) => { const r = Math.min(w, h) / 2; return `M${-w / 2 + r} ${-h / 2}H${w / 2 - r}A${r} ${r} 0 0 1 ${w / 2 - r} ${h / 2}H${-w / 2 + r}A${r} ${r} 0 0 1 ${-w / 2 + r} ${-h / 2}Z`; },
+  scallop: (w, h) => polar(w, h, (t) => 0.88 + 0.12 * Math.abs(Math.sin(8 * t))),
+  flower: (w, h) => polar(w, h, (t) => 0.55 + 0.45 * Math.abs(Math.sin(2.5 * t)), 180),
+  blob: (w, h) => polar(w, h, (t) => (1 + 0.12 * Math.sin(3 * t + 1) + 0.08 * Math.sin(5 * t + 2)) / 1.2),
+  cloud: (w, h) => { let d = ''; for (let i = 0; i <= 160; i++) { const t = (i / 160) * Math.PI * 2, r = 0.78 + 0.22 * Math.abs(Math.sin(3 * t + 0.5)); const px = Math.cos(t) * r, py = Math.min(0.62, Math.sin(t) * r * 0.9 + 0.08); d += `${i ? 'L' : 'M'}${(px * w) / 2} ${(py * h) / 2}`; } return d + 'Z'; },
+  sparkle: (w, h) => { let d = ''; for (let i = 0; i <= 160; i++) { const t = (i / 160) * Math.PI * 2, c = Math.cos(t), sn = Math.sin(t); d += `${i ? 'L' : 'M'}${(Math.sign(c) * Math.abs(c) ** 2.6 * w) / 2} ${(Math.sign(sn) * Math.abs(sn) ** 2.6 * h) / 2}`; } return d + 'Z'; },
+  bubble: (w, h) => { const b = h * 0.3, top = -h / 2, bot = h / 2 - b * 0.7, r = Math.min(w, bot - top) * 0.3; return `M${-w / 2 + r} ${top}H${w / 2 - r}Q${w / 2} ${top} ${w / 2} ${top + r}V${bot - r}Q${w / 2} ${bot} ${w / 2 - r} ${bot}H${-w * 0.08}L${-w * 0.28} ${h / 2}L${-w * 0.22} ${bot}H${-w / 2 + r}Q${-w / 2} ${bot} ${-w / 2} ${bot - r}V${top + r}Q${-w / 2} ${top} ${-w / 2 + r} ${top}Z`; },
+  crown: (w, h) => `M${-w / 2} ${h / 2}V${-h * 0.3}L${-w * 0.25} ${h * 0.05}L0 ${-h / 2}L${w * 0.25} ${h * 0.05}L${w / 2} ${-h * 0.3}V${h / 2}Z`,
+  arch: (w, h) => { const ry = Math.min(w / 2, h * 0.6); return `M${-w / 2} ${h / 2}V${-h / 2 + ry}A${w / 2} ${ry} 0 0 1 ${w / 2} ${-h / 2 + ry}V${h / 2}Z`; },
+  ticket: (w, h) => { const r = h * 0.18; return `M${-w / 2} ${-h / 2}H${w / 2}V${-r}A${r} ${r} 0 0 0 ${w / 2} ${r}V${h / 2}H${-w / 2}V${r}A${r} ${r} 0 0 0 ${-w / 2} ${-r}Z`; },
+  wave: (w, h) => { let d = ''; for (let i = 0; i <= 80; i++) { const t = i / 80; d += `${i ? 'L' : 'M'}${-w / 2 + t * w} ${Math.sin(t * Math.PI * 4) * h * 0.32}`; } return d; },
+  squiggle: (w, h) => { let d = ''; for (let i = 0; i <= 120; i++) { const t = i / 120; d += `${i ? 'L' : 'M'}${-w / 2 + t * w} ${Math.sin(t * Math.PI * 9) * h * 0.3}`; } return d; },
 };
+export const OPEN_SHAPES = new Set(['wave', 'squiggle']);
+function polar(w, h, rf, n = 160) { let d = ''; for (let i = 0; i <= n; i++) { const t = (i / n) * Math.PI * 2, r = rf(t); d += `${i ? 'L' : 'M'}${(Math.cos(t - Math.PI / 2) * r * w) / 2} ${(Math.sin(t - Math.PI / 2) * r * h) / 2}`; } return d + 'Z'; }
+function shapePath(sh, lw, lh) {
+  let p;
+  if (sh === 'rect') { p = new Path2D(); p.rect(-lw / 2, -lh / 2, lw, lh); }
+  else if (sh === 'round') { p = new Path2D(); p.roundRect(-lw / 2, -lh / 2, lw, lh, Math.min(lw, lh) * 0.25); }
+  else if (sh === 'circle') { p = new Path2D(); p.ellipse(0, 0, lw / 2, lh / 2, 0, 0, Math.PI * 2); }
+  else p = new Path2D(SHAPE_PATHS[sh]?.(lw, lh) || '');
+  return p;
+}
 export function wrapLines(g, text, maxW) {
   const out = [];
   for (const para of String(text).split('\n')) {
@@ -535,6 +615,7 @@ export function drawLayers(g, x, y, w, h, role, b) {
     const cx = x + l.x * w, cy = y + l.y * h, lw = l.w * w, lh = (l.h ?? 0.1) * h;
     g.save(); g.translate(cx, cy); if (l.rot) g.rotate((l.rot * Math.PI) / 180); g.globalAlpha = l.opacity ?? 1;
     if (l.type === 'text') {
+      if (l.bg && l.bg !== 'none') { g.fillStyle = l.bgColor || b.accent; g.fill(shapePath(l.bg, lw, lh)); }
       const size = (l.size ?? 0.05) * h; g.font = fontCss(l.font || b.fonts?.body || 'Inter', l.weight || 400, size, l.italic);
       if ('letterSpacing' in g) g.letterSpacing = `${(l.spacing || 0) * size}px`;
       g.fillStyle = l.color || ink(b); g.textBaseline = 'middle'; g.textAlign = l.align || 'center';
@@ -547,7 +628,9 @@ export function drawLayers(g, x, y, w, h, role, b) {
       g.drawImage(l.img, -iw / 2, -ih / 2, iw, ih);
     } else if (l.type === 'icon' && l.d) {
       const k = Math.min(lw, lh) / 24; g.scale(k, k); g.translate(-12, -12);
-      g.strokeStyle = l.color || ink(b); g.lineWidth = (l.sw ?? 1.8); g.lineCap = g.lineJoin = 'round'; g.stroke(new Path2D(l.d));
+      const ip = new Path2D(l.d);
+      if (l.iconFill) { g.fillStyle = l.iconFill; g.fill(ip); }
+      g.strokeStyle = l.color || ink(b); g.lineWidth = (l.sw ?? 1.8); g.lineCap = g.lineJoin = 'round'; g.stroke(ip);
     } else if (l.type === 'shape') {
       g.fillStyle = l.fill || b.accent; g.strokeStyle = l.stroke || ink(b); g.lineWidth = (l.sw ?? 0) * Math.min(w, h) * 0.01;
       const sh = l.shape || 'rect';
@@ -556,6 +639,7 @@ export function drawLayers(g, x, y, w, h, role, b) {
       else if (sh === 'round') { p = new Path2D(); p.roundRect(-lw / 2, -lh / 2, lw, lh, Math.min(lw, lh) * 0.25); }
       else if (sh === 'circle') { p = new Path2D(); p.ellipse(0, 0, lw / 2, lh / 2, 0, 0, Math.PI * 2); }
       else if (sh === 'line') { g.strokeStyle = l.fill || ink(b); g.lineWidth = Math.max(1, lh); g.beginPath(); g.moveTo(-lw / 2, 0); g.lineTo(lw / 2, 0); g.stroke(); g.restore(); continue; }
+      else if (OPEN_SHAPES.has(sh)) { g.strokeStyle = l.fill && l.fill !== 'none' ? l.fill : ink(b); g.lineWidth = Math.max(1.5, Math.min(lh * 0.22, lw * 0.05)); g.lineCap = g.lineJoin = 'round'; g.stroke(new Path2D(SHAPE_PATHS[sh](lw, lh))); g.restore(); continue; }
       else p = new Path2D(SHAPE_PATHS[sh]?.(lw, lh) || '');
       if (l.fill !== 'none') g.fill(p);
       if (l.sw) g.stroke(p);

@@ -1,5 +1,5 @@
 // Vercel serverless function: the AI Design Director.
-// Modes: "concepts" (brief + reference images → 3 design plans), "refine" (plan + instruction → plan),
+// Modes: "concepts" (brief + reference images → 6 design plans), "refine" (plan + instruction → plan),
 //        "explain" (plan + question → answer), "logos" (brief + preferences → 6 logo recipes).
 // Set GEMINI_API_KEY in Vercel → Settings → Environment Variables. Optional: GEMINI_MODEL.
 export const config = { maxDuration: 60 };
@@ -7,7 +7,7 @@ export const config = { maxDuration: 60 };
 const API = 'https://generativelanguage.googleapis.com/v1beta';
 const PRODUCTS = ['can', 'slimcan', 'box', 'tub', 'jar', 'pouch', 'bottle', 'tube', 'papertube', 'cup', 'card', 'bag', 'tin', 'lidbox', 'bar', 'dropper', 'pump', 'takeout'];
 const CENTRES = ['none', 'spotlight', 'frame', 'arch', 'seal', 'sunburst', 'band', 'sash', 'block', 'split', 'bigtype', 'halftone'];
-const STYLES = ['classic', 'bold', 'minimal', 'heritage'];
+const STYLES = ['classic', 'poster', 'label', 'monogram', 'editorial', 'minimal', 'heritage'];
 const FONTS = ['Instrument Serif', 'DM Serif Display', 'Bebas Neue', 'Space Grotesk', 'Inter', 'Caveat', 'Tiro Devanagari Hindi', 'Mukta', 'Fraunces', 'Cormorant Garamond', 'Marcellus', 'Abril Fatface', 'Rozha One', 'Young Serif', 'Shrikhand', 'Baloo 2', 'Unbounded', 'Bricolage Grotesque', 'Syne'];
 const PATTERNS = ['none', 'rangoli', 'warli', 'madhubani', 'kalamkari', 'blockprint', 'botanical', 'dots', 'stripes', 'chevron'];
 const BORDERS = ['none', 'double', 'arch', 'ticket', 'stamp', 'crop', 'nameband', 'checker', 'wavy', 'stitched', 'torn', 'jali', 'deco', 'botanical', 'bauhaus', 'cutcorner', 'sticker'];
@@ -37,7 +37,7 @@ You never draw pixels: you write a DESIGN PLAN that Wrapt's engine renders on re
 Rules:
 - Colours are 6-digit hex. "pack" is the packaging base colour, "accent" is used for rules, borders and highlight text, "background" is the studio backdrop behind the product (soft and complementary).
 - Make text readable: accent and pack need strong contrast; avoid putting a mid-tone accent on a mid-tone pack.
-- Styles: classic = centred logo + small caps, calm; bold = big logo + diagonal colour band, energetic; minimal = near-white pack + one colour band, lots of space; heritage = Indian pattern bands at top & bottom + big display name, traditional.
+- Styles (layouts): classic = centred logo + small caps, calm; poster = logo on top, solid colour block below holding the words, bold and modern; label = an oval jar-style label on a rich pack colour, homely and trustworthy; monogram = the brand's own logo repeated as a quiet pattern behind a clean panel, premium and unique; editorial = the name set huge like a magazine cover with fine rules; minimal = near-white pack + one colour band, lots of space; heritage = Indian pattern bands + big display name, traditional. Never put text over busy stripes.
 - Patterns: rangoli/kolam (festive, South Indian), warli (tribal, earthy, Maharashtra), madhubani (Bihar folk art, fish motifs), kalamkari (paisley, premium ethnic), blockprint (Rajasthani booti, homely), botanical (natural/herbal), dots/stripes/chevron (modern/playful). opacity 0–0.6; heritage looks best 0.4–0.6, other styles 0.08–0.25.
 - Fonts: use 'Tiro Devanagari Hindi' or 'Mukta' whenever name or tagline contains Hindi/Devanagari. Bebas Neue = loud/young, DM Serif Display/Abril Fatface/Rozha One = premium & bold, Cormorant Garamond/Marcellus/Instrument Serif = elegant luxury, Fraunces/Young Serif = warm & friendly, Caveat = handmade, Shrikhand/Baloo 2 = playful, Space Grotesk/Inter/Unbounded/Syne/Bricolage Grotesque = modern.
 - Borders: double (classic), arch (Mughal arch window — candles, skincare, D2C), ticket (snacks, coffee), stamp (gifting, heritage), crop (printer's crop marks — minimal, editorial), nameband (brand name ribbon — bold, streetwear), checker (retro cafe, fun), wavy (kids, drinks), stitched (handmade, crafts), torn (rustic, artisanal), jali (Indian lattice — traditional), deco (art deco corners — luxury, gold), botanical (leaf corners — tea, natural, skincare), bauhaus (geometric blocks — bold, colourful), cutcorner (apothecary — spices, wellness), sticker (friendly label), none.
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
   if (mode === 'concepts') {
     parts = [
       ...images.slice(0, 3).map((d) => ({ inline_data: { mime_type: 'image/jpeg', data: String(d).split(',').pop() } })),
-      { text: `${GUIDE}\n\n${images.length ? `The user attached ${images.length} reference image(s) — take only their mood.\n` : ''}${hasLogo ? 'The user already has their logo.\n' : ''}${packs.length ? `Packaging that suits this product (use only these unless the user named one): ${packs.map(String).join(', ')}.\n` : ''}User brief: """${String(brief).slice(0, 1500)}"""\n\nReturn exactly 3 clearly different concepts (for example Premium, Minimal, and Traditional or Playful — pick what fits the brief), each a complete plan.` },
+      { text: `${GUIDE}\n\n${images.length ? `The user attached ${images.length} reference image(s) — take only their mood.\n` : ''}${hasLogo ? 'The user already has their logo.\n' : ''}${packs.length ? `Packaging that suits this product (use only these unless the user named one): ${packs.map(String).join(', ')}.\n` : ''}User brief: """${String(brief).slice(0, 1500)}"""\n\nReturn exactly 6 clearly different concepts, each with a DIFFERENT style (layout) and a different palette, ordered best-fit first. Give each a short evocative concept name. Each must be a complete plan.` },
     ];
     schema = { type: 'OBJECT', properties: { concepts: { type: 'ARRAY', items: PLAN } }, required: ['concepts'] };
   } else if (mode === 'logos') {
@@ -103,7 +103,7 @@ ${p.colors?.length ? `Colours they chose: ${p.colors.join(', ')} — use them.` 
 ${p.idea ? `Their idea: """${String(p.idea).slice(0, 200)}"""` : ''}
 ${b.hasSketch ? 'The attached image is THE USER\'S OWN DRAWING of their symbol. It is the heart of the logo: use mark.source="sketch" in at least 4 of the 6 recipes, and pick fonts that match its character (mention it in rationale).' : ''}
 Rules for great, non-generic logos:
-- Typography first: at least 3 recipes are type-led (layout wordmark, stacked or lettermark, or a treatment). Great small-brand logos are mostly great type with one clever detail.
+- Be distinctive, never plain: at most 2 recipes are type-only, and each of those needs a clever treatment (never treatment none). The rest pair the name with a symbol in a container or an emblem. Vary fonts boldly (display serifs, chunky grotesques, scripts) — no two alike, avoid default-looking sans wordmarks.
 - Treatments: swash = curved underline; dot = coloured full stop after the name; split = second word (or first letter) in the second colour; shadow = retro offset shadow; cut = a thin horizontal slice through the letters; outline = only for heavy fonts; swap = the symbol replaces an "o" in the name (only if the name has an o).
 - Symbols: use ONLY these glyphs, they fit the product: ${glyphs.join(', ')}. Use source "none" for pure type. Never add hearts or stars unless the user asked.
 - Max 2 elements (symbol + name). Must read at 32px and in one colour. tracking: -4..30 (positive for UPPERCASE, about 0 for title/lower case).

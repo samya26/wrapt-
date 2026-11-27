@@ -447,7 +447,7 @@ export function designLogos(ctx) {
     return { name, layout, font, weight: W || (VARIABLE(font) && i % 2 === 0 ? 'bold' : 'regular'), case: c, tracking: trackFor(font, c), treatment: 'none', mark: { source: 'none' }, colors: { primary, secondary }, sub: '', category: cat, ...extra };
   };
   const sub = CATEGORIES[cat]?.sub || '';
-  const gens = genReady() && !deva ? genMarks(name, ctx.seed ?? hash(name), 4, prefs) : null;
+  const gens = genReady() && !deva ? genMarks(name, ctx.seed ?? hash(name), 6, prefs) : null;
   const G = (i, fallback) => (gens ? { source: 'gen', gen: gens[i], container: 'none' } : fallback);
   const swapOk = /[oO0]/.test(name.slice(1)) || /[oO]/.test(name);
   const lists = {
@@ -456,7 +456,9 @@ export function designLogos(ctx) {
     symbol: [S('mark-left', 0, { mark: mark(0, 'none') }), S('mark-top', 1, { mark: G(0, mark(1, shape || 'circle')) }), S('mark-left', 2, { mark: G(1, mark(2, shape || 'square')) }), S('wordmark', 3, { treatment: swapOk ? 'swap' : treats[0], mark: mark(0) }), S('mark-top', 4, { mark: mark(1, shape || 'circle') }), S('stacked', 5, { sub })],
     emblem: [S('emblem', 0, { mark: mark(0), sub }), S('emblem', 1, { mark: G(0, mark(1, 'circle', 'line')), sub }), S('mark-top', 2, { mark: mark(2, shape || 'arch') }), S('lettermark', 3, { mark: { source: 'none', container: shape || 'shield' } }), S('mark-top', 4, { mark: G(1, mark(0)) }), S('stacked', 5, { sub })],
   };
-  lists.surprise = [lists.wordmark[0], lists.lettermark[0], lists.symbol[0], lists.emblem[1], lists.wordmark[4], lists.lettermark[3]];
+  // first impressions matter: mostly one-of-a-kind letter marks, only one plain type option
+  lists.surprise = gens ? [S('mark-top', 0, { mark: G(0) }), S('mark-left', 1, { mark: G(1) }), S('emblem', 2, { mark: G(2), sub }), S('mark-top', 3, { mark: G(3) }), S('mark-left', 5, { mark: G(4) }), S('wordmark', 4, { treatment: swapOk ? 'swap' : treats[0] === 'none' ? treats[1] || 'underline' : treats[0], mark: mark(0) })]
+    : [lists.wordmark[0], lists.lettermark[0], lists.symbol[0], lists.emblem[1], lists.wordmark[4], lists.lettermark[3]];
   // their own drawing leads: 4 of the 6 use it
   const drawn = [S('mark-left', 0, { mark: mark(0) }), S('mark-top', 1, { mark: mark(0, 'none') }), S('emblem', 2, { mark: mark(0), sub }), swapOk ? S('wordmark', 3, { treatment: 'swap', mark: mark(0) }) : S('mark-left', 3, { mark: mark(0, shape || 'circle') }), S('wordmark', 4, { treatment: treats[0] }), S('stacked', 5, { sub })];
   const out = (sketch ? drawn : lists[ctx.type] || lists.surprise).map((s, i) => ({ ...s, colors: i % 3 === 1 ? { primary, secondary: primary } : { primary, secondary } }));

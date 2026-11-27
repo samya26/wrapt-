@@ -87,7 +87,7 @@ async function makeOptions() {
   if (!S.name.trim()) S.name = 'Your Brand';
   const local = designLogos({ ...c, name: S.name });
   // AI ideas + at least two one-of-a-kind generated marks from their own letters
-  const gen = local.filter((o) => o.mark?.source === 'gen').slice(0, 2);
+  const gen = local.filter((o) => o.mark?.source === 'gen').slice(0, 3);
   opts = opts ? enforceLogos([...opts.slice(0, 6 - gen.length), ...gen, ...local].slice(0, 6), { ...c, name: S.name }) : local;
   S.options = opts; S.sel = 0; S.busy = false;
   await loadFonts(...new Set(opts.map((o) => o.font)));

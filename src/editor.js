@@ -1,13 +1,43 @@
 // Artwork editor: add your own text, paragraphs, shapes, icons and images on top of the
 // AI design — on the front or the back — then drag, resize and rotate them.
-import { paintFace, FONTS, SHAPE_PATHS, ink, paper } from './art.js';
+import { paintFace, FONTS, SHAPE_PATHS, OPEN_SHAPES, ink, paper, autoInk } from './art.js';
 import { GLYPHS } from './logo.js';
 
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
-const SHAPES = { rect: 'Rectangle', round: 'Rounded', circle: 'Circle', line: 'Line', star: 'Star', badge: 'Badge', heart: 'Heart', arrow: 'Arrow', ribbon: 'Ribbon' };
-const ICONS = ['leaf', 'sprout', 'sun', 'drop', 'flame', 'heart', 'star', 'wheat', 'cup', 'bean', 'lotus', 'moon', 'spark', 'gem', 'paw', 'wave', 'mountain', 'cherry', 'citrus', 'chilli', 'bee', 'whisk', 'cupcake', 'dot'];
+const SHAPES = { rect: 'Rectangle', round: 'Rounded', pill: 'Pill', circle: 'Circle', scallop: 'Scallop', flower: 'Flower', cloud: 'Cloud', blob: 'Blob', bubble: 'Speech bubble', sparkle: 'Sparkle', star: 'Star', heart: 'Heart', badge: 'Badge', crown: 'Crown', arch: 'Arch', ticket: 'Ticket', ribbon: 'Ribbon', arrow: 'Arrow', wave: 'Wave', squiggle: 'Squiggle', line: 'Line' };
+// a few cute, hand-drawn-feel icons (24×24, drawn as rounded strokes)
+const daisy = (() => { let d = 'M12 9.6a2.4 2.4 0 1 0 0 4.8a2.4 2.4 0 1 0 0-4.8Z'; for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4, c = Math.cos(a), s = Math.sin(a), p = (r, o) => `${(12 + c * r - s * o).toFixed(2)} ${(12 + s * r + c * o).toFixed(2)}`; d += `M${p(3.2, 0)}Q${p(6.5, 2.6)} ${p(9.2, 0)}Q${p(6.5, -2.6)} ${p(3.2, 0)}Z`; } return d; })();
+const CUTE = {
+  smiley: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18Z M9 10v.6 M15 10v.6 M8.3 14.2c1.1 1.6 2.3 2.3 3.7 2.3s2.6-.7 3.7-2.3',
+  strawberry: 'M12 7.5c-4 0-7 1.3-7 4.3 0 4 4 8.2 7 9.2 3-1 7-5.2 7-9.2 0-3-3-4.3-7-4.3Z M12 7.5 9 4.5 M12 7.5l3-3 M12 7.5V3.5 M9.2 11v.3 M12 13.2v.3 M14.8 11v.3 M10.5 16.2v.3 M13.5 16.2v.3',
+  bow: 'M12 12C10 9 6 7 4.2 8.6S4 15 6 15s4-1.5 6-3Z M12 12c2-3 6-5 7.8-3.4S20 15 18 15s-4-1.5-6-3Z M12 12l-2.6 7 M12 12l2.6 7',
+  rainbow: 'M3 18a9 9 0 0 1 18 0 M6.2 18a5.8 5.8 0 0 1 11.6 0 M9.4 18a2.6 2.6 0 0 1 5.2 0',
+  butterfly: 'M12 8v11 M12 10C9.5 5 4 4.2 4 7.8s4.2 4.6 8 3.2 M12 10c2.5-5 8-5.8 8-2.2s-4.2 4.6-8 3.2 M12 13.5c-3 0-6 1-6 3.6s3.4 2.6 6-1.4 M12 13.5c3 0 6 1 6 3.6s-3.4 2.6-6-1.4 M12 8 10.2 5 M12 8l1.8-3',
+  mushroom: 'M3.5 12.5a8.5 7.5 0 0 1 17 0Z M9 12.5v5.5a3 2 0 0 0 6 0v-5.5 M8 9v.3 M12 7v.3 M16 9.5v.3',
+  donut: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18Z M12 9.2a2.8 2.8 0 1 0 0 5.6a2.8 2.8 0 1 0 0-5.6Z M6.5 8.5l1 .6 M16.8 7.2l-.8 1 M17.8 14.6l-1-.4 M7.4 16l.9-.9 M11 5.6h1.6',
+  icecream: 'M7.2 10.5 12 21l4.8-10.5 M6.8 10.5a5.2 5.2 0 0 1 10.4 0Z M9.4 13.6l4.6 1.8 M10.6 16.6l2.4 1',
+  cake: 'M4 20.5h16V13L9 9 4 11Z M4 15.2h16 M9 9V5.5 M9 5.5c-.8-.8 0-2 0-2s.8 1.2 0 2',
+  bolt: 'M13.5 2.5 5.5 14h6l-1 7.5 8-11.5h-6l1-7.5Z',
+  music: 'M9 17.5V5.5l10-2v12 M9 17.5a2.5 2 0 1 1-5 0a2.5 2 0 1 1 5 0Z M19 15.5a2.5 2 0 1 1-5 0a2.5 2 0 1 1 5 0Z',
+  planet: 'M12 6.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11Z M6.8 14.6C3.6 16.6 2.6 18 3.4 18.7c1.3 1.2 7-1 11.4-4.2s7.4-6.8 6.1-8c-.7-.7-2.4-.2-4.6 1',
+  daisy,
+  tulip: 'M12 21.5v-9 M12 17.2c-1.8-1.4-3.8-1.6-5-.8 M12 19c1.8-1.4 3.8-1.6 5-.8 M7 3.5l2.5 3L12 2.8l2.5 3.7L17 3.5V8a5 5 0 0 1-10 0Z',
+  cat: 'M4 20c0-5 0-8 1-11L4 3.5l5 3c2-.6 4-.6 6 0l5-3-1 5.5c1 3 1 6 1 11Z M9 12.5v.6 M15 12.5v.6 M11 15.2l1 .9 1-.9',
+  crown: 'M3.5 19h17 M4.5 16 3.5 7.5l5 4 3.5-6.5 3.5 6.5 5-4-1 8.5Z',
+  cloud: 'M7 18.5a4.2 4.2 0 0 1-.6-8.4A5.6 5.6 0 0 1 17.2 9a4.7 4.7 0 0 1 .3 9.5Z',
+  sparkles: 'M10 3c.5 4.6 1.9 6 6.5 6.5-4.6.5-6 1.9-6.5 6.5-.5-4.6-1.9-6-6.5-6.5C8.1 9 9.5 7.6 10 3Z M18 14c.3 2.2.8 2.7 3 3-2.2.3-2.7.8-3 3-.3-2.2-.8-2.7-3-3 2.2-.3 2.7-.8 3-3Z',
+  avocado: 'M12 2.5c-3 0-4.5 4.5-6 8.5-1.6 4.4.4 10.5 6 10.5s7.6-6.1 6-10.5C16.5 7 15 2.5 12 2.5Z M12 11.2a3 3.4 0 1 0 0 6.8a3 3.4 0 1 0 0-6.8Z',
+  coffee: 'M5 9.5h11v6a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4Z M16 11h1.5a2.3 2.3 0 0 1 0 4.6H16 M8.5 3.5c-.8 1 .8 2 0 3.2 M12 3.5c-.8 1 .8 2 0 3.2',
+};
+// ready-made stickers: a word on a little shape
+const STICKERS = [
+  { t: 'Handmade', bg: 'scallop', sq: true }, { t: '100% Natural', bg: 'badge', sq: true }, { t: 'Made in India', bg: 'ribbon' }, { t: 'Vegan', bg: 'flower', sq: true },
+  { t: 'Limited edition', bg: 'ticket' }, { t: 'New!', bg: 'sparkle', sq: true }, { t: 'Hello!', bg: 'bubble' }, { t: 'Small batch', bg: 'pill' },
+  { t: 'With love', bg: 'cloud' }, { t: 'No sugar', bg: 'circle', sq: true }, { t: 'Gift', bg: 'heart', sq: true }, { t: 'Bestseller', bg: 'crown', sq: true },
+];
+const ICONS = [...Object.keys(CUTE), 'leaf', 'sprout', 'sun', 'drop', 'flame', 'heart', 'star', 'wheat', 'cup', 'bean', 'lotus', 'moon', 'spark', 'gem', 'paw', 'wave', 'mountain', 'cherry', 'citrus', 'chilli', 'bee', 'whisk', 'cupcake', 'dot'];
 
 let E = null; // { brand, layers, face, aspect, wrap, sel, onDone, onCancel }
 
@@ -50,6 +80,10 @@ function add(l) {
   l = { id: uid(), face: E.face, x: 0.5, y: 0.5, rot: 0, opacity: 1, ...l };
   E.layers.push(l); E.sel = l.id; render(); props(); layerList();
 }
+// a square of side f × the short edge, in this face's 0..1 units
+// biggest type that still sits comfortably inside the sticker (size is a fraction of the face height)
+const fitSize = (st, w, h) => { const longest = Math.max(...st.t.split(' ').map((x) => x.length)), wpx = w * E.aspect; return st.sq ? Math.min(h * 0.2, (wpx * 0.66) / (longest * 0.66)) : Math.min(h * 0.42, (wpx * 0.8) / (st.t.length * 0.6)); };
+const sq = (f) => ({ w: f * Math.min(1, 1 / E.aspect), h: f * Math.min(1, E.aspect) });
 const brandCols = () => [...new Set([ink(E.brand), E.brand.accent, E.brand.pack, paper(E.brand), '#ffffff', '#1c1a17'])];
 
 function layerList() {
@@ -70,13 +104,15 @@ function props() {
       <div class="seg"><button type="button" data-edtog="weight" class="${l.weight >= 700 ? 'on' : ''}"><b>B</b></button><button type="button" data-edtog="upper" class="${l.upper ? 'on' : ''}">AA</button></div></div>
     <label class="ed-f"><span>Size</span><input type="range" min="0.015" max="0.2" step="0.002" value="${l.size}" data-edin="size"/></label>
     <label class="ed-f"><span>Letter spacing</span><input type="range" min="-0.05" max="0.4" step="0.01" value="${l.spacing || 0}" data-edin="spacing"/></label>
-    <div class="ed-f"><span>Colour</span>${sw('color')}</div>`;
+    <div class="ed-f"><span>Colour</span>${sw('color')}</div>
+    <div class="ed-f"><span>Sticker shape behind</span><div class="chips">${['none', 'pill', 'circle', 'scallop', 'flower', 'cloud', 'badge', 'sparkle', 'bubble', 'ribbon', 'ticket', 'heart', 'crown'].map((k) => `<button type="button" data-edset="bg" data-v="${k}" class="${(l.bg || 'none') === k ? 'on' : ''}">${k === 'none' ? 'None' : SHAPES[k]}</button>`).join('')}</div></div>
+    ${l.bg && l.bg !== 'none' ? `<div class="ed-f"><span>Sticker colour</span>${sw('bgColor')}</div>` : ''}`;
   if (l.type === 'shape') h += `
     <div class="ed-f"><span>Shape</span><div class="chips">${Object.entries(SHAPES).map(([k, v]) => `<button type="button" data-edset="shape" data-v="${k}" class="${l.shape === k ? 'on' : ''}">${v}</button>`).join('')}</div></div>
     <div class="ed-f"><span>Fill</span>${sw('fill')}<button type="button" class="link small" data-edset="fill" data-v="none">No fill</button></div>
     <label class="ed-f"><span>Outline</span><input type="range" min="0" max="3" step="0.1" value="${l.sw || 0}" data-edin="sw"/></label>
     ${l.sw ? `<div class="ed-f"><span>Outline colour</span>${sw('stroke')}</div>` : ''}`;
-  if (l.type === 'icon') h += `<div class="ed-f"><span>Colour</span>${sw('color')}</div><label class="ed-f"><span>Line weight</span><input type="range" min="0.8" max="3.5" step="0.1" value="${l.sw ?? 1.8}" data-edin="sw"/></label>`;
+  if (l.type === 'icon') h += `<div class="ed-f"><span>Colour</span>${sw('color')}</div><div class="ed-f"><span>Fill</span>${sw('iconFill')}<button type="button" class="link small" data-edset="iconFill" data-v="">No fill</button></div><label class="ed-f"><span>Line weight</span><input type="range" min="0.8" max="3.5" step="0.1" value="${l.sw ?? 1.8}" data-edin="sw"/></label>`;
   if (l.type === 'image') h += `<label class="check"><input type="checkbox" data-edtogc="round" ${l.round ? 'checked' : ''}/><span>Rounded corners</span></label>`;
   h += `
     <label class="ed-f"><span>Rotate</span><input type="range" min="-180" max="180" step="1" value="${l.rot || 0}" data-edin="rot"/></label>
@@ -88,16 +124,21 @@ const num = (k) => ['size', 'spacing', 'sw', 'rot', 'opacity'].includes(k);
 
 export function initEditor() {
   const dlg = $('#editor');
-  $('#ed-icons').innerHTML = ICONS.map((k) => `<button type="button" data-edicon="${k}" title="${k}"><svg viewBox="0 0 24 24"><path d="${GLYPHS[k]}"/></svg></button>`).join('');
-  $('#ed-shapes').innerHTML = Object.entries(SHAPES).map(([k, v]) => `<button type="button" data-edshape="${k}" title="${v}"><svg viewBox="-12 -12 24 24"><path d="${k === 'rect' ? 'M-9 -7h18v14h-18z' : k === 'round' ? 'M-6 -7h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3h-12a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3z' : k === 'circle' ? 'M-8 0a8 8 0 1 0 16 0a8 8 0 1 0-16 0' : k === 'line' ? 'M-9 0H9' : SHAPE_PATHS[k](18, 16)}"/></svg></button>`).join('');
+  $('#ed-icons').innerHTML = ICONS.map((k) => `<button type="button" data-edicon="${k}" title="${k}"><svg viewBox="0 0 24 24"><path d="${CUTE[k] || GLYPHS[k]}"/></svg></button>`).join('');
+  $('#ed-stickers').innerHTML = STICKERS.map((st, i) => `<button type="button" data-edsticker="${i}" title="${st.t}"><svg viewBox="-12 -12 24 24"><path d="${st.bg === 'circle' ? 'M-10 0a10 10 0 1 0 20 0a10 10 0 1 0-20 0' : SHAPE_PATHS[st.bg](st.sq ? 20 : 22, st.sq ? 20 : 12)}"/></svg><span>${st.t}</span></button>`).join('');
+  $('#ed-shapes').innerHTML = Object.entries(SHAPES).map(([k, v]) => `<button type="button" data-edshape="${k}" title="${v}"><svg viewBox="-12 -12 24 24"><path d="${k === 'rect' ? 'M-9 -7h18v14h-18z' : k === 'round' ? 'M-6 -7h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3h-12a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3z' : k === 'circle' ? 'M-8 0a8 8 0 1 0 16 0a8 8 0 1 0-16 0' : k === 'line' ? 'M-9 0H9' : SHAPE_PATHS[k](18, 16)}"${OPEN_SHAPES.has(k) || k === 'line' ? ' class="open"' : ''}/></svg></button>`).join('');
   dlg.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
     if (d.edface) setFace(d.edface);
     if (d.edadd === 'heading') add({ type: 'text', text: E.face === 'front' ? 'New!' : E.brand.name, font: E.brand.fonts?.display, size: 0.07, weight: 700, w: 0.7, h: 0.1, color: ink(E.brand), align: 'center' });
     if (d.edadd === 'para') add({ type: 'text', para: true, text: 'Ingredients: …\nNet wt. 250 g · Store in a cool, dry place.\nMade with love in India.', font: E.brand.fonts?.body || 'Inter', size: 0.03, weight: 400, w: 0.72, h: 0.22, y: 0.72, color: ink(E.brand), align: 'left', lead: 1.35 });
     if (d.edadd === 'badge') add({ type: 'text', text: '100% NATURAL', font: E.brand.fonts?.body || 'Inter', size: 0.032, weight: 700, upper: true, spacing: 0.12, w: 0.5, h: 0.06, y: 0.2, color: E.brand.accent, align: 'center' });
-    if (d.edshape) add({ type: 'shape', shape: d.edshape, fill: E.brand.accent, w: d.edshape === 'line' ? 0.5 : 0.3, h: d.edshape === 'line' ? 0.006 : 0.2 * E.aspect });
-    if (d.edicon) add({ type: 'icon', name: d.edicon, d: GLYPHS[d.edicon], color: ink(E.brand), w: 0.18, h: 0.18 * E.aspect, sw: 1.8 });
+    if (d.edshape) add({ type: 'shape', shape: d.edshape, fill: E.brand.accent, ...(d.edshape === 'line' ? { w: E.wrap ? 0.3 : 0.5, h: 0.006 } : ['wave', 'squiggle', 'pill', 'ticket', 'ribbon', 'arrow'].includes(d.edshape) ? { w: sq(0.5).w, h: sq(0.14).h } : sq(0.32)) });
+    if (d.edicon) add({ type: 'icon', name: d.edicon, d: CUTE[d.edicon] || GLYPHS[d.edicon], color: ink(E.brand), ...sq(0.22), sw: 1.8 });
+    if (d.edsticker) {
+      const st = STICKERS[+d.edsticker], bgc = E.brand.accent, { w, h } = st.sq ? sq(0.27) : { w: sq(0.5).w, h: sq(0.13).h };
+      add({ type: 'text', text: st.t, bg: st.bg, bgColor: bgc, color: autoInk(bgc), font: E.brand.fonts?.display || 'Inter', size: fitSize(st, w, h), weight: 700, upper: st.sq, spacing: st.sq ? 0.06 : 0.02, w, h, y: 0.24, x: E.wrap ? 0.64 : 0.74, rot: st.sq ? -10 : 0, align: 'center' });
+    }
     if (d.edlayer) { E.sel = d.edlayer; drawSel(); props(); layerList(); }
     if (d.edset) { const l = E.layers.find((x) => x.id === E.sel); if (l) { l[d.edset] = d.v; render(); props(); } }
     if (d.edtog) { const l = E.layers.find((x) => x.id === E.sel); if (l) { if (d.edtog === 'weight') l.weight = l.weight >= 700 ? 400 : 700; else l[d.edtog] = !l[d.edtog]; render(); props(); } }

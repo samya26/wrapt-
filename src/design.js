@@ -4,7 +4,8 @@
 import { contrast, luminance, mix, isDark, autoInk, readable, averageColor, logoCoverage, plainCorners, paper, ink, FONTS, PATTERNS, BORDERS, CENTRES, borderType } from './art.js';
 
 export const PRODUCTS = ['can', 'slimcan', 'box', 'tub', 'jar', 'pouch', 'bottle', 'tube', 'papertube', 'cup', 'card', 'bag', 'tin', 'lidbox', 'bar', 'dropper', 'pump', 'takeout'];
-export const STYLES = ['classic', 'bold', 'minimal', 'heritage'];
+export const STYLES = ['classic', 'poster', 'label', 'monogram', 'editorial', 'minimal', 'heritage'];
+export const STYLE_NAMES = { classic: 'Classic', poster: 'Poster', label: 'Jar label', monogram: 'Signature pattern', editorial: 'Editorial', minimal: 'Minimal', heritage: 'Heritage' };
 export const PLAN_KEYS = { product: PRODUCTS, style: STYLES, fontsDisplay: Object.keys(FONTS), pattern: Object.keys(PATTERNS).filter((p) => p !== 'none').concat('none'), border: Object.keys(BORDERS).filter((b) => b !== 'image'), finish: ['gloss', 'matte', 'metallic'], light: ['studio', 'sunlit', 'dramatic'] };
 
 /* Example plan
@@ -127,13 +128,23 @@ export function designLocally(brief, { refColors = [], hasLogo = false } = {}) {
     pattern: { type: KW(t, ['rangoli', 'kolam', 'festive', 'diwali']) ? 'rangoli' : KW(t, ['tribal', 'warli', 'village']) ? 'warli' : 'blockprint', opacity: 0.55 }, border: { type: KW(t, ['gift', 'diwali', 'festive', 'mithai']) ? 'stamp' : 'jali' }, finish: 'matte', light: 'sunlit',
     reasoning: { colour: 'Warm cream with a rich festive accent feels homemade and familiar — like something from nani\'s kitchen.', type: 'A warm serif headline with a simple body font keeps it traditional but readable.', layout: 'Indian block-print bands frame the label, like the border of a sari — instantly desi, never cluttered.' },
   } : {
-    concept: 'Playful', name, tagline, detail, product, style: 'bold',
+    concept: 'Playful', name, tagline, detail, product, style: 'poster',
     palette: { pack: isDark(base) ? mix(acc, '#ffffff', 0.15) : base, accent: isDark(base) ? base : mix(acc, '#000000', 0.1), background: mix(acc, '#ffffff', 0.75) },
     fonts: { display: hindi ? 'Mukta' : 'Bebas Neue', body: 'Space Grotesk' },
     pattern: { type: 'dots', opacity: 0.18 }, border: { type: KW(t, ['kids', 'candy', 'ice cream', 'icecream']) ? 'wavy' : KW(t, ['coffee', 'snack', 'chips', 'cafe']) ? 'ticket' : 'checker' }, finish: 'gloss', light: 'sunlit',
-    reasoning: { colour: 'A bright pack with a contrasting diagonal band grabs attention and feels fun and young.', type: 'A tall condensed display font is loud and confident, perfect for Instagram.', layout: 'An oversized logo and a dynamic diagonal stripe give it energy.' },
+    reasoning: { colour: 'A bright pack with one strong colour block grabs attention and feels fun and young.', type: 'A tall condensed display font is loud and confident, perfect for Instagram.', layout: 'A big logo up top and a solid colour block for the words — bold, but every word stays readable.' },
   };
-  const order = kidsy && !traditional ? [third, minimal, premium] : traditional ? [third, premium, minimal] : [premium, minimal, third];
+  // three more directions, each a different layout, so there are 6 to choose from
+  const label = { ...premium, concept: 'Jar label', style: 'label', palette: { pack: isDark(base) ? base : mix(acc, '#000', 0.25), accent: mix(acc, '#000', 0.15), background: mix(acc, '#ffffff', 0.8) }, fonts: { display: hindi ? 'Tiro Devanagari Hindi' : 'Young Serif', body: 'Inter' }, pattern: { type: 'dots', opacity: 0.1 }, border: { type: 'none' }, finish: 'gloss', light: 'sunlit',
+    reasoning: { colour: 'A rich pack colour with a cream oval label — the way jams and pickles have always looked trustworthy.', type: 'A warm serif feels homemade but tidy.', layout: 'An oval label holds the logo and line, like a hand-applied sticker.' } };
+  const signature = { ...minimal, concept: 'Signature pattern', style: 'monogram', palette: { pack: light, accent: dark, background: mix(light, '#000', 0.05) }, fonts: { display: hindi ? 'Mukta' : 'Fraunces', body: 'Inter' }, pattern: { type: 'none', opacity: 0 }, border: { type: 'none' }, finish: 'matte', light: 'studio',
+    reasoning: { colour: 'Soft tone-on-tone colours let the pattern whisper rather than shout.', type: 'A soft serif keeps it friendly and premium at once.', layout: 'Your own logo repeats as a quiet pattern behind a clean panel — like a luxury monogram, unique to you.' } };
+  const editorial = { ...minimal, concept: 'Editorial', style: 'editorial', palette: { pack: isDark(base) ? '#f4efe6' : '#f7f3ec', accent: dark, background: '#e9e3d8' }, fonts: { display: hindi ? 'Tiro Devanagari Hindi' : 'Abril Fatface', body: 'Inter' }, pattern: { type: 'none', opacity: 0 }, border: { type: 'none' }, finish: 'matte', light: 'studio',
+    reasoning: { colour: 'Paper-white with one deep colour, like a magazine cover.', type: 'A fat display serif set huge makes the name the hero.', layout: 'Big type, fine rules and a small lockup — confident and editorial.' } };
+  const poster = third.style === 'poster' ? third : { ...minimal, concept: 'Playful', style: 'poster', palette: { pack: isDark(base) ? mix(acc, '#ffffff', 0.15) : base, accent: isDark(base) ? base : mix(acc, '#000000', 0.1), background: mix(acc, '#ffffff', 0.75) }, fonts: { display: hindi ? 'Mukta' : 'Bricolage Grotesque', body: 'Space Grotesk' }, pattern: { type: 'dots', opacity: 0.14 }, border: { type: 'none' }, finish: 'gloss', light: 'sunlit',
+    reasoning: { colour: 'A bright pack with one strong colour block grabs attention.', type: 'A chunky modern grotesque is friendly and loud.', layout: 'Logo up top, words on a solid colour block — bold, and everything stays readable.' } };
+  const first = kidsy && !traditional ? [poster, label, minimal] : traditional ? [third, premium, label] : [premium, minimal, poster];
+  const order = [...first, ...[poster, label, signature, editorial, premium, minimal].filter((x) => !first.includes(x))].slice(0, 6);
   return order.map((p) => normalizePlan(p, { hasLogo }));
 }
 
@@ -145,7 +156,7 @@ export function refineLocally(plan, instruction) {
   else if (col) { p.palette.pack = col[1]; did.push(`pack colour → ${col[0]}`); }
   if (KW(t, ['modern', 'clean', 'simple', 'minimal'])) { p.style = 'minimal'; p.fonts.display = 'Instrument Serif'; p.pattern.type = 'none'; p.border.type = 'crop'; did.push('cleaner, more minimal'); }
   if (KW(t, ['premium', 'luxury', 'expensive', 'elegant', 'classy'])) { p.style = 'classic'; p.palette.pack = mix(p.palette.pack, '#000000', 0.5); p.palette.accent = '#c9a35a'; p.fonts.display = 'DM Serif Display'; p.border.type = 'deco'; p.finish = 'gloss'; p.light = 'dramatic'; did.push('more premium'); }
-  if (KW(t, ['fun', 'playful', 'young', 'bright', 'loud'])) { p.style = 'bold'; p.fonts.display = 'Bebas Neue'; p.pattern = { type: 'dots', opacity: 0.2 }; did.push('more playful'); }
+  if (KW(t, ['fun', 'playful', 'young', 'bright', 'loud'])) { p.style = 'poster'; p.fonts.display = 'Bebas Neue'; p.pattern = { type: 'dots', opacity: 0.2 }; did.push('more playful'); }
   if (KW(t, ['traditional', 'desi', 'indian', 'ethnic', 'festive', 'diwali'])) { p.style = 'heritage'; p.border.type = 'jali'; p.pattern = { type: KW(t, ['diwali', 'festive']) ? 'rangoli' : 'blockprint', opacity: 0.5 }; did.push('more traditional'); }
   for (const pat of Object.keys(PATTERNS)) if (t.includes(pat)) { p.pattern = { type: pat, opacity: p.pattern?.opacity || 0.3 }; did.push(`${PATTERNS[pat]} pattern`); }
   if (KW(t, ['no pattern', 'remove pattern', 'without pattern'])) { p.pattern.type = 'none'; did.push('pattern removed'); }
@@ -169,7 +180,7 @@ export function normalizePlan(p, { hasLogo } = {}) {
   p = { ...p };
   p.product = pick(p.product, PRODUCTS, 'box');
   p.centre = pick(p.centre, Object.keys(CENTRES), { classic: 'frame', minimal: 'none', bold: 'sunburst', heritage: 'arch' }[p.style] || 'none');
-  p.style = pick(p.style, STYLES, 'classic');
+  p.style = pick(p.style === 'bold' ? 'poster' : p.style, STYLES, 'classic');
   p.palette = { pack: hexOk(p.palette?.pack, '#26324a'), accent: hexOk(p.palette?.accent, '#e9a03b'), background: hexOk(p.palette?.background, '#efe9df') };
   // make sure accent text/rules read on the pack (the AI sometimes picks two mid-tones)
   if (p.style !== 'bold') p.palette.accent = readable(p.palette.accent, p.style === 'minimal' ? mix(p.palette.pack, '#ffffff', 0.9) : p.palette.pack, 2.2);

@@ -43,7 +43,7 @@ import { openLogoStudio, initLogoStudio } from './logostudio.js';
 import { initLanding } from './landing.js';
 import { openEditor, initEditor } from './editor.js';
 import { loadGenFonts } from './genmark.js';
-import { designLocally, refineLocally, normalizePlan, audit, askAI, allowedPacks } from './design.js';
+import { designLocally, refineLocally, normalizePlan, audit, askAI, allowedPacks, STYLE_NAMES } from './design.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -103,9 +103,13 @@ function refreshLogo() {
   if (b.logo) { const k = 100 / Math.max(b.logo.width, b.logo.height); g.drawImage(b.logo, 60 - (b.logo.width * k) / 2, 60 - (b.logo.height * k) / 2, b.logo.width * k, b.logo.height * k); }
 }
 // the designed logo, re-coloured so it always reads on this pack
-function specLogo(b) { const sp = { ...b.logoSpec, name: b.name || b.logoSpec.name }; return renderLogo(sp, packColors(sp, paper(b), b.accent, ink(b))).canvas; }
-// a clean name-only logo when nobody designed one yet (used for all 3 concepts, so the brand stays consistent)
-const STYLE_PREFS = { classic: { modern: -0.5, serious: 0.5, bold: 0 }, minimal: { modern: 0.6, serious: 0.4, bold: -0.3, precise: 0.6 }, bold: { modern: 0.4, serious: -0.5, bold: 0.8 }, heritage: { modern: -0.7, serious: 0, bold: 0.4, precise: -0.3 } };
+// the same logo, re-coloured for whatever it sits on (oval labels, panels)
+function logoOnFor(b) {
+  return (bg) => { if (b.logoSource !== 'spec' || !b.logoSpec) return null; const sp = { ...b.logoSpec, name: b.name || b.logoSpec.name }; return renderLogo(sp, packColors(sp, bg, b.accent, isDark(bg) ? '#fbf7ef' : '#1c1a17')).canvas; };
+}
+function specLogo(b) { b.logoOn = logoOnFor(b); const sp = { ...b.logoSpec, name: b.name || b.logoSpec.name }; return renderLogo(sp, packColors(sp, paper(b), b.accent, ink(b))).canvas; }
+// a clean name-only logo when nobody designed one yet (used for all concepts, so the brand stays consistent)
+const STYLE_PREFS = { classic: { modern: -0.5, serious: 0.5, bold: 0 }, minimal: { modern: 0.6, serious: 0.4, bold: -0.3, precise: 0.6 }, bold: { modern: 0.4, serious: -0.5, bold: 0.8 }, poster: { modern: 0.4, serious: -0.4, bold: 0.7 }, label: { modern: -0.4, serious: 0, bold: 0.3 }, monogram: { modern: 0, serious: 0.5, bold: 0, precise: 0.5 }, editorial: { modern: 0.3, serious: 0.6, bold: 0.5 }, heritage: { modern: -0.7, serious: 0, bold: 0.4, precise: -0.3 } };
 function autoSpec(p) {
   const dark = luminance(p.palette.pack) < luminance(p.palette.accent) ? p.palette.pack : p.palette.accent;
   const opts = designLogos({ name: p.name, brief: $('#brief').value, type: 'surprise', prefs: STYLE_PREFS[p.style] || {}, colors: [dark, p.palette.accent] });
@@ -217,11 +221,19 @@ async function generate(opts = {}) {
   let plans, note = '';
   if (aiMode !== 'local') {
     const res = await askAI({ mode: 'concepts', packs: opts.product ? [] : allowedPacks(brief), brief: brief + (locked ? ` Their logo is already designed (colours ${state.brand.logoSpec.colors.primary} and ${state.brand.logoSpec.colors.secondary}) — build the packaging around it.` : ''), images: state.refs.map((r) => r.data), hasLogo: hasLogo || !!locked });
-    if (res?.concepts?.length) { plans = res.concepts.slice(0, 3).map((p) => normalizePlan(p, { hasLogo })); aiMode = 'ai'; }
+    if (res?.concepts?.length) { plans = res.concepts.slice(0, 6).map((p) => normalizePlan(p, { hasLogo })); aiMode = 'ai'; }
     else { if (res?.unavailable) aiMode = 'local'; else note = `AI had a problem (${res?.error || 'unknown'}) — used the built-in designer.`; }
     setAiStatus();
   }
-  if (!plans) plans = designLocally(brief, { refColors: colors.length ? [colors[0], colors[1] || mix(colors[0], isDark(colors[0]) ? '#f3d9a4' : '#2a1d16', 0.6)] : state.refs[0]?.colors || [], hasLogo });
+  const local = designLocally(brief, { refColors: colors.length ? [colors[0], colors[1] || mix(colors[0], isDark(colors[0]) ? '#f3d9a4' : '#2a1d16', 0.6)] : state.refs[0]?.colors || [], hasLogo });
+  if (!plans) plans = local;
+  // always 6 directions, each a different layout (pad AI results with the built-in ones)
+  {
+    const seen = new Set(), out = [];
+    for (const p of [...plans, ...local]) { if (out.length >= 6) break; if (seen.has(p.style)) continue; seen.add(p.style); out.push(p); }
+    for (const st of ['classic', 'poster', 'label', 'monogram', 'editorial', 'minimal', 'heritage']) { if (out.length >= 6) break; if (!seen.has(st)) { seen.add(st); out.push({ ...out[out.length % Math.max(1, out.length)], style: st, concept: STYLE_NAMES[st] }); } }
+    plans = out;
+  }
   // hard choices from the start screen always win
   const fits = allowedPacks(brief), named = /\b(can|box|tub|jar|pouch|bottle|tube|cup|card|bag)s?\b|paper tube|hang card/i.test(brief);
   const same = plans.every((p) => p.product === plans[0].product);
@@ -233,8 +245,8 @@ async function generate(opts = {}) {
   await renderConcepts();
   await applyPlan(plans[0], { keepUploaded: hasLogo });
   markChosen(0);
-  btn.disabled = false; btn.textContent = '✦ Design 3 new concepts'; $('#busy').hidden = true;
-  say(`${note ? esc(note) + '<br>' : ''}Here are 3 directions for <b>${esc(plans[0].name)}</b> — pick one on the left, then tell me here what to change.`);
+  btn.disabled = false; btn.textContent = '✦ Design 6 new concepts'; $('#busy').hidden = true;
+  say(`${note ? esc(note) + '<br>' : ''}Here are 6 directions for <b>${esc(plans[0].name)}</b> — pick one from the list, then tell me here what to change.`);
 }
 $('#generate').onclick = () => generate();
 $('#brief').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generate(); });
@@ -242,7 +254,7 @@ $('#brief').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.met
 // Render each concept in 3D off-screen and show it as a thumbnail.
 async function renderConcepts() {
   const box = $('#concepts'); box.hidden = false;
-  box.innerHTML = state.concepts.map((p, i) => `<article class="concept" data-concept="${i}"><div class="thumb"><span class="spin-dot"></span></div><div class="c-body"><em>${p.concept}</em><b>${esc(p.name)}</b><small>${p.product} · ${p.style}</small></div></article>`).join('');
+  box.innerHTML = state.concepts.map((p, i) => `<article class="concept" data-concept="${i}"><div class="thumb"><span class="spin-dot"></span></div><div class="c-body"><em>${esc(p.concept)}</em><small>${esc(PRODUCT_NAMES?.[p.product] || p.product)} · ${STYLE_NAMES[p.style] || p.style}</small></div></article>`).join('');
   const keep = snap();
   for (let i = 0; i < state.concepts.length; i++) {
     const p = state.concepts[i]; await loadFonts(p.fonts.display, p.fonts.body);
@@ -676,16 +688,16 @@ function demoBrand(o) {
 }
 function buildDemos(renderer) {
   const D = [
-    ['can', { brief: 'Sparkling lemonade, playful and fun', name: 'Fizz & Co', product: 'can', style: 'bold', centre: 'sunburst', tagline: 'Sparkling lemonade' }],
+    ['can', { brief: 'Sparkling lemonade, playful and fun', name: 'Fizz & Co', product: 'can', style: 'poster', centre: 'none', tagline: 'Sparkling lemonade' }],
     ['card', { brief: 'Handmade polymer clay keychains, cute', name: 'Knot & Key', product: 'card', style: 'classic', centre: 'frame', type: 'symbol', tagline: 'Handmade keychains', detail: '1 piece' }],
     ['pouch', { brief: "Masala chai called 'Kesar Chai' — warm, traditional", name: 'Kesar Chai', product: 'pouch', style: 'heritage', centre: 'arch', border: 'jali' }],
     ['bottle', { brief: 'Cold-pressed hair oil, natural, minimal', name: 'Bloom', product: 'bottle', style: 'minimal', tagline: 'Cold-pressed hair oil' }],
-    ['tube', { brief: 'Rose face cream, cute beauty', name: 'Glow Lab', product: 'tube', style: 'bold', centre: 'spotlight', tagline: 'Rose face cream' }],
+    ['tube', { brief: 'Rose face cream, cute beauty', name: 'Glow Lab', product: 'tube', style: 'label', centre: 'none', tagline: 'Rose face cream' }],
     ['cup', { brief: 'Cold brew coffee to go, modern', name: 'Brew Theory', product: 'cup', style: 'minimal', centre: 'band', tagline: 'Cold brew, done right' }],
     ['bag', { brief: 'Handmade soy candles gift shop, luxury', name: 'Diya & Co.', product: 'bag', style: 'classic', centre: 'frame', border: 'deco', bcol: 'gold' }],
     ['box0', { brief: 'Dark chocolate gift box, premium', name: 'Cocoa Club', product: 'box', style: 'classic', centre: 'frame', border: 'deco', bcol: 'gold', tagline: 'Single-origin dark chocolate' }],
     ['box1', { brief: 'Dark chocolate gift box, traditional festive', name: 'Cocoa Club', product: 'box', style: 'heritage', centre: 'arch', border: 'jali', palette: { pack: '#5a1426', accent: '#d9b46a' }, tagline: 'Festive gift edition' }],
-    ['box2', { brief: 'Chocolate box, playful for kids', name: 'Cocoa Club', product: 'box', style: 'bold', centre: 'sunburst', border: 'checker', palette: { pack: '#f3b6c8', accent: '#2a1d16' }, tagline: 'Milk choc bites' }],
+    ['box2', { brief: 'Chocolate box, playful for kids', name: 'Cocoa Club', product: 'box', style: 'monogram', centre: 'none', border: 'none', palette: { pack: '#f3b6c8', accent: '#2a1d16' }, tagline: 'Milk choc bites' }],
     ['box3', { brief: 'Chocolate, minimal modern', name: 'Cocoa Club', product: 'box', style: 'minimal', centre: 'none', border: 'crop', tagline: '72% dark' }],
   ];
   return D.map(([key, o]) => { const b = demoBrand(o); return { key, built: BUILDERS[o.product](b, { ...DEFAULTS[o.product], finish: o.product === 'can' ? 'metallic' : 'gloss', fold: 1 }, renderer) }; });
