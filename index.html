@@ -145,6 +145,7 @@
           <div class="products">
             <button data-product="box"><svg viewBox="0 0 40 40"><path d="M8 13l12-6 12 6v15l-12 6-12-6z" /><path d="M8 13l12 6 12-6M20 19v15" /></svg>Box</button>
             <button data-product="lidbox"><svg viewBox="0 0 40 40"><path d="M7 17h26v15H7z" /><path d="M6 12h28v6H6z" /><path d="M20 12v20" /></svg>Gift box</button>
+            <button data-product="drawer"><svg viewBox="0 0 40 40"><path d="M6 15h22v12H6z" /><path d="M28 17h7v10h-7" /><path d="M35 21h2" /></svg>Drawer box</button>
             <button data-product="papertube"><svg viewBox="0 0 40 40"><path d="M13 12h14v22H13z" /><path d="M12 6h16v8H12z" /></svg>Paper tube</button>
             <button data-product="bag"><svg viewBox="0 0 40 40"><path d="M9 14h22l-1 20H10z" /><path d="M15 14v-3a5 5 0 0 1 10 0v3" /></svg>Bag</button>
             <button data-product="card"><svg viewBox="0 0 40 40"><path d="M11 5h18v30H11z" /><path d="M17 9h6" /><path d="M15 16h10v10H15z" /></svg>Hang card</button>
@@ -235,7 +236,7 @@
         </form>
       </div>
       <div class="views">
-        <button data-view="hero">Hero</button><button data-view="front">Front</button><button data-view="top">Top</button><button data-view="low">Low</button>
+        <button data-view="hero">Hero</button><button data-view="front">Front</button><button data-view="top">Top</button><button data-view="low">Low</button><button type="button" id="drawer-btn" hidden>Open box</button>
         <label class="spin"><input id="spin" type="checkbox" /><span>Spin</span></label>
       </div>
       <p class="hint">Drag to rotate · pinch or scroll to zoom</p>
@@ -339,7 +340,7 @@
         <h2>Make it yours <em>all optional</em></h2>
         <div class="wz-field"><span>Packaging</span>
           <div class="chips" id="wz-product">
-            <button type="button" data-wp="" class="on">✦ Let AI choose</button><button type="button" data-wp="can">Can</button><button type="button" data-wp="box">Box</button><button type="button" data-wp="tub">Tub</button><button type="button" data-wp="jar">Jar</button><button type="button" data-wp="pouch">Pouch</button><button type="button" data-wp="bottle">Bottle</button><button type="button" data-wp="tube">Tube</button><button type="button" data-wp="cup">Cup</button><button type="button" data-wp="papertube">Paper tube</button><button type="button" data-wp="card">Hang card</button><button type="button" data-wp="bag">Bag</button><button type="button" data-wp="lidbox">Gift box</button><button type="button" data-wp="tin">Tin</button><button type="button" data-wp="bar">Bar wrap</button><button type="button" data-wp="dropper">Dropper</button><button type="button" data-wp="pump">Pump bottle</button><button type="button" data-wp="takeout">Takeout</button><button type="button" data-wp="slimcan">Slim can</button>
+            <button type="button" data-wp="" class="on">✦ Let AI choose</button><button type="button" data-wp="can">Can</button><button type="button" data-wp="box">Box</button><button type="button" data-wp="tub">Tub</button><button type="button" data-wp="jar">Jar</button><button type="button" data-wp="pouch">Pouch</button><button type="button" data-wp="bottle">Bottle</button><button type="button" data-wp="tube">Tube</button><button type="button" data-wp="cup">Cup</button><button type="button" data-wp="papertube">Paper tube</button><button type="button" data-wp="card">Hang card</button><button type="button" data-wp="bag">Bag</button><button type="button" data-wp="lidbox">Gift box</button><button type="button" data-wp="drawer">Drawer box</button><button type="button" data-wp="tin">Tin</button><button type="button" data-wp="bar">Bar wrap</button><button type="button" data-wp="dropper">Dropper</button><button type="button" data-wp="pump">Pump bottle</button><button type="button" data-wp="takeout">Takeout</button><button type="button" data-wp="slimcan">Slim can</button>
           </div>
         </div>
         <div class="wz-field"><span>Feel <em>up to 3</em></span><div class="chips" id="wz-vibe"></div></div>

@@ -1,3 +1,4 @@
+import { MOTIFS, MOTIF_SETS } from './motifs.js';
 // Everything 2D: colour maths, fonts, patterns, borders, logos, label layouts, templates.
 // The label is painted on a canvas from a "brand" object (the design plan), then wrapped onto 3D.
 
@@ -184,7 +185,7 @@ function track(g, part, group = false) {
 // ---------- patterns (procedural tiles) ----------
 export const PATTERNS = {
   none: 'None', rangoli: 'Rangoli / kolam', warli: 'Warli', madhubani: 'Madhubani', kalamkari: 'Kalamkari paisley',
-  blockprint: 'Block-print booti', botanical: 'Botanical', dots: 'Polka dots', stripes: 'Stripes', chevron: 'Chevron',
+  blockprint: 'Block-print booti', botanical: 'Botanical', dots: 'Polka dots', stripes: 'Stripes', chevron: 'Chevron', folk: 'Folk motifs (dense)',
 };
 const tileCache = new Map();
 function tile(type, color, image) {
@@ -252,8 +253,37 @@ function tile(type, color, image) {
   tileCache.set(key, c);
   return c;
 }
+// Dense, hand-printed folk pattern: motifs packed edge to edge in 2–3 colours, unique per brand name.
+const folkCache = new Map();
+function folkTile(b) {
+  const A = b.pattern?.color || b.accent, B = mix(A, '#000000', 0.3), C = isDark(paper(b)) ? mix(paper(b), '#ffffff', 0.75) : '#fbf3e0';
+  const set = b.motifs?.length ? b.motifs : MOTIF_SETS.folk, seedStr = `${b.name}|${set.join()}`;
+  const key = [A, C, seedStr].join('|'); if (folkCache.has(key)) return folkCache.get(key);
+  const T = 640, c = document.createElement('canvas'); c.width = c.height = T; const g = c.getContext('2d');
+  let seed = 0; for (const ch of seedStr) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  const R = rng(seed), placed = [];
+  const fits = (x, y, r) => placed.every((q) => { let dx = Math.abs(q.x - x), dy = Math.abs(q.y - y); dx = Math.min(dx, T - dx); dy = Math.min(dy, T - dy); return Math.hypot(dx, dy) > q.r + r + 5; });
+  for (let i = 0; i < 2600 && placed.length < 140; i++) {
+    const big = placed.length < 30, r = big ? 32 + R() * 24 : 10 + R() * 20, x = R() * T, y = R() * T;
+    if (fits(x, y, r)) placed.push({ x, y, r, m: set[Math.floor(R() * set.length)], rot: (R() - 0.5) * 1.4, col: R() < 0.7 ? A : R() < 0.6 ? B : C });
+  }
+  for (let i = 0; i < 1800; i++) { const r = 3 + R() * 4, x = R() * T, y = R() * T; if (fits(x, y, r)) placed.push({ x, y, r, m: 'dot', rot: 0, col: R() < 0.5 ? A : C }); }
+  for (const q of placed) {
+    const p = new Path2D(MOTIFS[q.m] || MOTIFS.dot), k = (q.r * 2) / 24;
+    for (const ox of [-T, 0, T]) for (const oy of [-T, 0, T]) {
+      if (q.x + ox + q.r < 0 || q.x + ox - q.r > T || q.y + oy + q.r < 0 || q.y + oy - q.r > T) continue;
+      g.save(); g.translate(q.x + ox, q.y + oy); g.rotate(q.rot); g.scale(k, k); g.translate(-12, -12); g.fillStyle = q.col; g.fill(p, 'evenodd'); g.restore();
+    }
+  }
+  folkCache.set(key, c); return c;
+}
 function paintPattern(g, x, y, w, h, b, s) {
   const p = b.pattern; if (!p || p.type === 'none') return;
+  if (p.type === 'folk') {
+    const pat = g.createPattern(folkTile(b), 'repeat'), k = (s / 660) * (p.scale || 1);
+    pat.setTransform(new DOMMatrix().translate(x, y).scale(k, k));
+    g.save(); g.globalAlpha = p.opacity ?? 1; g.fillStyle = pat; g.fillRect(x, y, w, h); g.restore(); return;
+  }
   const col = p.color || (isDark(paper(b)) ? mix(paper(b), '#ffffff', 0.5) : mix(paper(b), b.accent, 0.8));
   const t = tile(p.type, col, p.image);
   const pat = g.createPattern(t, 'repeat');
@@ -428,7 +458,7 @@ export function borderTile(b, type, W = 64, H = 84) {
 
 // ---------- centre designs: a shape behind the logo that changes the whole feel ----------
 export const CENTRES = { none: 'None', spotlight: 'Spotlight', frame: 'Label panel', arch: 'Arch', seal: 'Seal', sunburst: 'Sunburst', band: 'Band', sash: 'Diagonal', block: 'Colour block', split: 'Split', bigtype: 'Big type', halftone: 'Halftone' };
-const LOGO_Y = { classic: 0.44, bold: 0.36, poster: 0.36, label: 0.42, monogram: 0.39, editorial: 0.3, minimal: 0.5, heritage: 0.46 };
+const LOGO_Y = { folk: 0.42, matchbox: 0.5, classic: 0.44, bold: 0.36, poster: 0.36, label: 0.42, monogram: 0.39, editorial: 0.3, minimal: 0.5, heritage: 0.46 };
 function paintCentre(g, x, y, w, h, b, s) {
   const t = b.centre || 'none'; if (t === 'none') return;
   const pap = paper(b), dark = isDark(pap);
@@ -506,6 +536,46 @@ function drawLogoAt(g, b, logo, cx, cy, size, id) {
   if (id) { const p = new Path2D(); p.rect(cx - (logo.width * k) / 2, cy - (logo.height * k) / 2, logo.width * k, logo.height * k); rec({ id, kind: 'logo', label: 'Logo', path: p, m: g.getTransform(), op: 'fill' }); }
 }
 
+// ---------- folk & matchbox helpers ----------
+function scallopPath(cx, cy, rx, ry, n = 26) {
+  const p = new Path2D();
+  for (let i = 0; i <= 240; i++) { const t = (i / 240) * Math.PI * 2, r = 0.955 + 0.045 * Math.abs(Math.sin((n * t) / 2)); const X = cx + Math.cos(t) * rx * r, Y = cy + Math.sin(t) * ry * r; i ? p.lineTo(X, Y) : p.moveTo(X, Y); }
+  p.closePath(); return p;
+}
+const onCol = (c) => (autoInk(c) === '#1c1a17' ? '#1c1a17' : '#fbf7ef');
+// characters set along an arc (centre of the circle at cx, cy + R; text sits on radius R)
+function arcText(g, str, cx, cy, R, size, color, font, weight = 700, spacing = 0.08, maxAng = 2.4) {
+  g.save(); g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle';
+  let sz = size; const set = () => { g.font = fontCss(font, weight, sz); };
+  set(); const widths = () => [...str].map((ch) => g.measureText(ch).width + sz * spacing);
+  let ws = widths(), tot = ws.reduce((a, c) => a + c, 0);
+  while (tot / R > maxAng && sz > size * 0.4) { sz *= 0.92; set(); ws = widths(); tot = ws.reduce((a, c) => a + c, 0); }
+  let acc = -tot / 2;
+  [...str].forEach((ch, i) => { const th = (acc + ws[i] / 2) / R; acc += ws[i]; g.save(); g.translate(cx + R * Math.sin(th), cy + R - R * Math.cos(th)); g.rotate(th); g.fillText(ch, 0, 0); g.restore(); });
+  g.restore();
+}
+// a curved ribbon banner with folded tails, carrying a line of text (editable like any text)
+function ribbon(g, cx, cy, width, bh, bend, fill, str, font) {
+  const r = g.__raw || g;
+  let id = null, e = null;
+  if (CUR) { id = nextId(`text-${CUR.style}`); e = edit(id); if (e?.hide) { rec({ id, kind: 'text', label: str, hidden: true }); return; } if (e?.text != null) str = e.text; }
+  const col = e?.color || fill, txt = onCol(col), dark = mix(col, '#000000', 0.32);
+  const R = (width / 2) ** 2 / (2 * bend) + bend / 2, a = Math.asin(Math.min(0.99, width / 2 / R)), oy = cy + R;
+  const P = (th, rr) => [cx + rr * Math.sin(th), oy - rr * Math.cos(th)];
+  r.save(); shifted(r, e);
+  for (const sd of [-1, 1]) { // tails
+    const [ex, ey] = P(sd * a, R); r.save(); r.translate(ex, ey + bh * 0.38); r.rotate(sd * a); r.scale(sd, 1);
+    r.fillStyle = dark; r.beginPath(); r.moveTo(-bh * 0.35, -bh / 2); r.lineTo(bh * 1.15, -bh / 2); r.lineTo(bh * 0.8, 0); r.lineTo(bh * 1.15, bh / 2); r.lineTo(-bh * 0.35, bh / 2); r.closePath(); r.fill();
+    r.restore();
+  }
+  const band = new Path2D(); band.arc(cx, oy, R + bh / 2, -Math.PI / 2 - a, -Math.PI / 2 + a); band.arc(cx, oy, R - bh / 2, -Math.PI / 2 + a, -Math.PI / 2 - a, true); band.closePath();
+  r.fillStyle = col; r.fill(band);
+  r.strokeStyle = mix(col, '#000000', 0.2); r.lineWidth = Math.max(1, bh * 0.04);
+  const inner = new Path2D(); inner.arc(cx, oy, R + bh * 0.36, -Math.PI / 2 - a * 0.97, -Math.PI / 2 + a * 0.97); inner.moveTo(...P(-a * 0.97, R - bh * 0.36)); inner.arc(cx, oy, R - bh * 0.36, -Math.PI / 2 - a * 0.97, -Math.PI / 2 + a * 0.97); r.stroke(inner);
+  if (str) arcText(r, str, cx, cy, R, bh * 0.5 * (e?.scale || 1), e?.textColor || txt, font, 700, 0.1, a * 1.8);
+  if (id) rec({ id, kind: 'text', label: str, text: str, path: band, m: r.getTransform(), op: 'fill' });
+  r.restore();
+}
 function paintPanel(g0, x, y, w, h, role, b) {
   const prevCur = CUR; CUR = { role, b, n: {}, w, h, style: b.style };
   const s = Math.min(w, h), ts = b.textScale ?? 1;
@@ -526,7 +596,10 @@ function paintPanel(g0, x, y, w, h, role, b) {
     text(g, b.tagline, cx, y + h * 0.5, s * 0.055 * ts, ac, { font: disp, weight: 400, maxW: w * 0.8 * wk });
     text(g, b.detail, cx, y + h * 0.62, s * 0.036 * ts, fg, { font: body, weight: 500, maxW: w * 0.8 * wk });
   };
-  if (st === 'poster') {
+  if (role === 'band') { // long thin edges (drawer box sides): the name, big and chunky
+    const nm = String(b.name || '').toUpperCase();
+    text(g, nm, cx, cy + h * 0.04, Math.min(h * 0.62, (w * 1.45) / Math.max(4, nm.length)), ac, { font: disp, weight: 800, spacing: s * 0.02, maxW: w * 0.9 });
+  } else if (st === 'poster') {
     // clean split: logo on the pack colour, a solid colour block below with the words
     const top = y + h * 0.64, blk = b.accent, on = autoInk(blk) === '#1c1a17' ? '#1c1a17' : '#fbf7ef';
     g.fillStyle = blk; g.fillRect(x, top, w, y + h - top);
@@ -538,6 +611,76 @@ function paintPanel(g0, x, y, w, h, role, b) {
     } else if (role === 'back') { drawLogo(g, b, cx, y + h * 0.3, s * 0.34); text(g, b.tagline, cx, y + h * 0.5, s * 0.05 * ts, fg, { font: disp, maxW: w * 0.8 * wk }); text(g, b.detail, cx, top + (y + h - top) * 0.5, s * 0.038 * ts, on, { font: body, weight: 500, maxW: w * 0.84 * wk }); }
     else if (role === 'side') side(b.name.toUpperCase(), Math.min(w * 0.36, h * 0.09) * ts, ac, { font: disp, weight: 700, spacing: 4 });
     else drawLogo(g, b, cx, cy, s * 0.62);
+  } else if (st === 'folk') {
+    // maximalist folk poster: dense motif pattern, a scalloped cartouche, a curved ribbon banner
+    const lab = '#fbf3e0', labInk = readable(b.accent, lab, 3);
+    if (role === 'front') {
+      const cw = Math.min(w * 0.72 * wk, s * 0.86), ch = Math.min(h * 0.5, cw * 0.86), ccy = y + h * 0.42 + ly;
+      g.fillStyle = b.accent; g.fill(scallopPath(cx, ccy, cw / 2 + s * 0.022, ch / 2 + s * 0.022));
+      g.fillStyle = lab; g.fill(scallopPath(cx, ccy, cw / 2, ch / 2));
+      g.strokeStyle = b.accent; g.lineWidth = Math.max(1, s * 0.005); g.beginPath(); g.ellipse(cx, ccy, cw / 2 - s * 0.04, ch / 2 - s * 0.04, 0, 0, Math.PI * 2); g.stroke();
+      drawLogo(g, b, cx, ccy - ch * 0.07, Math.min(cw, ch) * 0.6, lab);
+      ribbon(g, cx, ccy + ch * 0.4, Math.min(w * 0.9 * wk, cw * 1.3), s * 0.11, s * 0.045, b.accent, String(b.tagline || '').toUpperCase(), body);
+      if (b.detail) {
+        g.save(); g.font = fontCss(body, 700, s * 0.03 * ts); const tw = Math.min(w * 0.8 * wk, g.measureText(b.detail.toUpperCase()).width + s * 0.12); g.restore();
+        g.fillStyle = lab; g.beginPath(); g.roundRect(cx - tw / 2, y + h * 0.885, tw, s * 0.065, s * 0.033); g.fill();
+        text(g, b.detail.toUpperCase(), cx, y + h * 0.885 + s * 0.0335, s * 0.03 * ts, labInk, { font: body, weight: 700, spacing: s * 0.004, maxW: tw - s * 0.06 });
+      }
+    } else if (role === 'back') {
+      const cw = Math.min(w * 0.76 * wk, s * 0.9), ch = Math.min(h * 0.6, cw * 0.9), ccy = y + h * 0.48;
+      g.fillStyle = b.accent; g.fill(scallopPath(cx, ccy, cw / 2 + s * 0.02, ch / 2 + s * 0.02));
+      g.fillStyle = lab; g.fill(scallopPath(cx, ccy, cw / 2, ch / 2));
+      drawLogo(g, b, cx, ccy - ch * 0.22, Math.min(cw, ch) * 0.3, lab);
+      text(g, b.tagline, cx, ccy + ch * 0.04, s * 0.05 * ts, labInk, { font: disp, maxW: cw * 0.74 });
+      text(g, b.detail, cx, ccy + ch * 0.18, s * 0.034 * ts, '#1c1a17', { font: body, weight: 500, maxW: cw * 0.74 });
+    } else if (role === 'side') {
+      g.fillStyle = b.accent; g.fillRect(x, y, w, h);
+      side(String(b.name || '').toUpperCase(), Math.min(w * 0.42, h * 0.11) * ts, onCol(b.accent) === '#1c1a17' ? mix(b.accent, '#000000', 0.55) : lab, { font: disp, weight: 800, spacing: 3 });
+    } else { g.fillStyle = lab; g.fill(scallopPath(cx, cy, s * 0.36, s * 0.36)); drawLogo(g, b, cx, cy, s * 0.5, lab); }
+  } else if (st === 'matchbox') {
+    // vintage matchbox label: double frame, tiny text running round the edge, a sunburst emblem and a banner
+    const col = b.accent, onA = onCol(col), fg2 = readable(col, paper(b), 2.6);
+    const frame = () => {
+      const i1 = s * 0.032, i2 = s * 0.088;
+      g.strokeStyle = fg2; g.lineWidth = s * 0.016; g.strokeRect(x + i1, y + i1, w - 2 * i1, h - 2 * i1);
+      g.lineWidth = Math.max(1, s * 0.004); g.strokeRect(x + i2, y + i2, w - 2 * i2, h - 2 * i2);
+      const mid = (i1 + i2) / 2 + s * 0.002, unit = ` ${String(b.name || '').toUpperCase()} • ${String(b.tagline || '').toUpperCase()} •`, ts2 = s * 0.022;
+      const rep2 = (len) => unit.repeat(Math.max(1, Math.ceil(len / (unit.length * ts2 * 0.62)))).trim();
+      for (const [ex, ey, len, rot] of [[cx, y + mid, w - 2 * i2, 0], [cx, y + h - mid, w - 2 * i2, 0], [x + mid, cy, h - 2 * i2, -Math.PI / 2], [x + w - mid, cy, h - 2 * i2, Math.PI / 2]]) {
+        g.save(); g.translate(ex, ey); g.rotate(rot); text(g, rep2(len), 0, 0, ts2, fg2, { font: body, weight: 700, spacing: s * 0.003, maxW: len * 0.96 }); g.restore();
+      }
+      for (const [qx, qy] of [[x + i1 + (i2 - i1) / 2, y + i1 + (i2 - i1) / 2], [x + w - i1 - (i2 - i1) / 2, y + i1 + (i2 - i1) / 2], [x + i1 + (i2 - i1) / 2, y + h - i1 - (i2 - i1) / 2], [x + w - i1 - (i2 - i1) / 2, y + h - i1 - (i2 - i1) / 2]]) {
+        const k2 = (i2 - i1) * 0.9 / 24; g.save(); g.translate(qx, qy); g.scale(k2, k2); g.translate(-12, -12); g.fillStyle = fg2; g.fill(new Path2D(MOTIFS.star)); g.restore();
+      }
+    };
+    if (role === 'front') {
+      frame();
+      const bandY = y + h * 0.13, bandH = h * 0.085;
+      g.fillStyle = col; g.fillRect(x + s * 0.1, bandY, w - s * 0.2, bandH);
+      text(g, (b.detail || 'Made with care').toUpperCase(), cx, bandY + bandH / 2, Math.min(bandH * 0.5, s * 0.04) * ts, onA, { font: body, weight: 800, spacing: s * 0.008, maxW: w - s * 0.3 });
+      const Rm = Math.min(w * 0.34 * wk, h * 0.27), ecy = y + h * 0.5 + ly;
+      g.save(); g.beginPath(); g.arc(cx, ecy, Rm, 0, Math.PI * 2); g.clip();
+      g.fillStyle = mix(col, paper(b), 0.55); g.fillRect(cx - Rm, ecy - Rm, Rm * 2, Rm * 2);
+      g.fillStyle = mix(col, paper(b), 0.25);
+      for (let i = 0; i < 28; i += 2) { const a0 = (i / 28) * Math.PI * 2, a1 = ((i + 1) / 28) * Math.PI * 2; g.beginPath(); g.moveTo(cx, ecy); g.arc(cx, ecy, Rm, a0, a1); g.closePath(); g.fill(); }
+      g.restore();
+      g.strokeStyle = fg2; g.lineWidth = s * 0.008; g.beginPath(); g.arc(cx, ecy, Rm, 0, Math.PI * 2); g.stroke();
+      const disc = paper(b); g.fillStyle = disc; g.beginPath(); g.arc(cx, ecy, Rm * 0.66, 0, Math.PI * 2); g.fill();
+      g.lineWidth = Math.max(1, s * 0.004); g.beginPath(); g.arc(cx, ecy, Rm * 0.62, 0, Math.PI * 2); g.stroke();
+      drawLogo(g, b, cx, ecy, Rm * 1.05, disc);
+      ribbon(g, cx, ecy + Rm * 0.82, Math.min(w * 0.88 * wk, Rm * 2.7), s * 0.1, s * 0.035, col, String(b.tagline || '').toUpperCase(), body);
+      // checker strip
+      const sq = s * 0.022, cy2 = y + h - s * 0.088 - sq * 2.6, n = Math.floor((w - s * 0.24) / sq), x0 = cx - (n * sq) / 2;
+      g.fillStyle = fg2; for (let i = 0; i < n; i++) for (let j = 0; j < 2; j++) if ((i + j) % 2 === 0) g.fillRect(x0 + i * sq, cy2 + j * sq, sq, sq);
+    } else if (role === 'back') {
+      frame();
+      drawLogo(g, b, cx, y + h * 0.32, s * 0.36);
+      ribbon(g, cx, y + h * 0.52, Math.min(w * 0.8 * wk, s * 0.8), s * 0.09, s * 0.03, col, String(b.tagline || '').toUpperCase(), body);
+      text(g, b.detail, cx, y + h * 0.68, s * 0.036 * ts, fg, { font: body, weight: 600, maxW: w * 0.7 * wk });
+    } else if (role === 'side') {
+      g.fillStyle = col; g.fillRect(x, y, w, h);
+      side(String(b.name || '').toUpperCase(), Math.min(w * 0.42, h * 0.1) * ts, onA, { font: disp, weight: 800, spacing: 4 });
+    } else drawLogo(g, b, cx, cy, s * 0.6);
   } else if (st === 'label') {
     // a classic jar-style oval label sitting on the pack colour
     const lw = Math.min(w * 0.78 * wk, s * 0.92), lh = Math.min(h * 0.62, lw * 0.82), lcy = y + h * 0.46;

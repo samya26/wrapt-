@@ -404,19 +404,56 @@ export function buildTakeout(brand, opts, renderer) {
   return { group: shadowAll(g), height: h * 1.6, radius: t2 * 1.1 };
 }
 
-export const BUILDERS = { can: buildCan, slimcan: (b, o, r) => buildCan(b, o, r), box: buildBox, tub: buildTub, jar: buildJar, pouch: buildPouch, bottle: buildBottle, tube: buildTube, papertube: buildPaperTube, cup: buildCup, card: buildCard, bag: buildBag, tin: buildTin, lidbox: buildLidBox, bar: buildBar, dropper: buildDropper, pump: buildPump, takeout: buildTakeout };
+// ---------- DRAWER BOX (matchbox style): a printed sleeve with a tray that slides out ----------
+export function buildDrawer(brand, opts, renderer) {
+  const W = opts.w ?? 1.2, D = opts.d ?? 0.8, H = opts.h ?? 0.32;
+  const fin = opts.finish === 'metallic' ? 'gloss' : opts.finish;
+  const face = (role, a) => printMat(tex(paintFace(brand, role, a, 1400), renderer), fin);
+  const innerCol = isDark(brand.pack) ? mix(brand.pack, '#ffffff', 0.15) : mix(brand.pack, '#000000', 0.12);
+  const inner = new THREE.MeshStandardMaterial({ color: innerCol, roughness: 0.9, side: THREE.BackSide });
+  const two = (geo, mat) => { const o = new THREE.Group(); o.add(new THREE.Mesh(geo, mat), new THREE.Mesh(geo, inner)); return o; };
+  const sleeve = new THREE.Group();
+  const top = two(new THREE.PlaneGeometry(W, D), face('front', W / D)); top.rotation.x = -Math.PI / 2; top.position.y = H;
+  const bot = two(new THREE.PlaneGeometry(W, D), face('back', W / D)); bot.rotation.x = Math.PI / 2; bot.position.y = 0.001;
+  const band = face('band', W / H);
+  const s1 = two(new THREE.PlaneGeometry(W, H), band); s1.position.set(0, H / 2, D / 2);
+  const s2 = two(new THREE.PlaneGeometry(W, H), band); s2.position.set(0, H / 2, -D / 2); s2.rotation.y = Math.PI;
+  sleeve.add(top, bot, s1, s2);
+  // the tray: a solid colour inside, with a little pull ribbon
+  const tray = new THREE.Group(), t = 0.012, tw = W * 0.985, td = D * 0.96, th = H * 0.9;
+  const trayMat = new THREE.MeshStandardMaterial({ color: brand.accent, roughness: 0.75 });
+  const floorMat = new THREE.MeshStandardMaterial({ color: mix(brand.accent, '#000000', 0.25), roughness: 0.85 });
+  const box = (w, h, d, x, y, z, m) => { const k = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); k.position.set(x, y, z); tray.add(k); };
+  box(tw, t, td, 0, t / 2 + 0.004, 0, floorMat);
+  box(t, th, td, -tw / 2 + t / 2, th / 2, 0, trayMat); box(t, th, td, tw / 2 - t / 2, th / 2, 0, trayMat);
+  box(tw, th, t, 0, th / 2, td / 2 - t / 2, trayMat); box(tw, th, t, 0, th / 2, -td / 2 + t / 2, trayMat);
+  const rib = new THREE.MeshPhysicalMaterial({ color: mix(brand.accent, '#000000', 0.35), roughness: 0.4, sheen: 1 });
+  const tab = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.006, 0.09), rib); tab.position.set(tw / 2 + 0.045, th * 0.45, 0); tray.add(tab);
+  const g = new THREE.Group(), holder = new THREE.Group();
+  holder.add(sleeve, tray); holder.position.y = 0.02;
+  const tilt = new THREE.Group(); tilt.add(holder); holder.position.set(0, 0, 0);
+  tilt.rotation.x = 0.5; tilt.position.y = (D / 2) * Math.sin(0.5) + 0.03; // leans toward you so the printed top shows
+  g.add(tilt);
+  g.rotation.set(0, -0.45, 0);
+  const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+  const fold = (k) => { tray.position.x = (1 - ease(Math.min(1, Math.max(0, k)))) * W * 0.62; }; // 1 = closed, 0 = open
+  fold(opts.fold ?? 1);
+  return { group: shadowAll(g), height: D * 0.55 + H, radius: W * 0.62, fold, drawer: true };
+}
+
+export const BUILDERS = { can: buildCan, slimcan: (b, o, r) => buildCan(b, o, r), box: buildBox, tub: buildTub, jar: buildJar, pouch: buildPouch, bottle: buildBottle, tube: buildTube, papertube: buildPaperTube, cup: buildCup, card: buildCard, bag: buildBag, tin: buildTin, lidbox: buildLidBox, bar: buildBar, dropper: buildDropper, pump: buildPump, takeout: buildTakeout, drawer: buildDrawer };
 export const DEFAULTS = {
   can: { r: 0.33, h: 1.15 }, box: { w: 1.0, h: 1.3, d: 0.45 }, tub: { r: 0.5, h: 0.55 }, jar: { r: 0.38, h: 0.78 }, pouch: { w: 0.9, h: 1.25 },
   bottle: { r: 0.3, h: 1.45 }, tube: { r: 0.22, h: 1.2 }, papertube: { r: 0.3, h: 1.1 }, cup: { r: 0.4, h: 0.95 }, card: { w: 0.8, h: 1.2 }, bag: { w: 0.9, h: 1.0, d: 0.38 },
-  slimcan: { r: 0.27, h: 1.45 }, tin: { r: 0.5, h: 0.38 }, lidbox: { w: 1.0, h: 0.42, d: 1.0 }, bar: { w: 1.3, h: 0.6 }, dropper: { r: 0.2, h: 0.62 }, pump: { r: 0.28, h: 1.15 }, takeout: { w: 0.62, h: 0.85 },
+  slimcan: { r: 0.27, h: 1.45 }, tin: { r: 0.5, h: 0.38 }, lidbox: { w: 1.0, h: 0.42, d: 1.0 }, bar: { w: 1.3, h: 0.6 }, dropper: { r: 0.2, h: 0.62 }, pump: { r: 0.28, h: 1.15 }, takeout: { w: 0.62, h: 0.85 }, drawer: { w: 1.2, h: 0.32, d: 0.8 },
 };
-export const PRODUCT_NAMES = { can: 'Can', slimcan: 'Slim can', box: 'Box', tub: 'Tub', jar: 'Jar', pouch: 'Pouch', bottle: 'Bottle', tube: 'Tube', papertube: 'Paper tube', cup: 'Cup', card: 'Hang card', bag: 'Bag', tin: 'Tin', lidbox: 'Gift box', bar: 'Bar wrap', dropper: 'Dropper', pump: 'Pump bottle', takeout: 'Takeout box' };
+export const PRODUCT_NAMES = { can: 'Can', slimcan: 'Slim can', box: 'Box', tub: 'Tub', jar: 'Jar', pouch: 'Pouch', bottle: 'Bottle', tube: 'Tube', papertube: 'Paper tube', cup: 'Cup', card: 'Hang card', bag: 'Bag', tin: 'Tin', lidbox: 'Gift box', bar: 'Bar wrap', dropper: 'Dropper', pump: 'Pump bottle', takeout: 'Takeout box', drawer: 'Drawer box' };
 // Printed area of each product, in mm (1 unit = 10 cm) — used by the print-ready PDF
 export function printArea(product, d) {
   const C = (r) => 2 * Math.PI * r * 100;
   if (product === 'box') return { kind: 'box', w: (2 * d.d + 2 * d.w) * 100, h: (2 * d.d + d.h) * 100 };
   if (product === 'pouch' || product === 'card' || product === 'bag' || product === 'bar' || product === 'takeout') return { kind: 'faces', w: d.w * 100, h: d.h * 100 };
-  if (product === 'lidbox') return { kind: 'faces', w: d.w * 100, h: d.d * 100 };
+  if (product === 'lidbox' || product === 'drawer') return { kind: 'faces', w: d.w * 100, h: d.d * 100 };
   if (product === 'tin') return { kind: 'wrap', w: C(d.r), h: d.h * 78 };
   if (product === 'dropper' || product === 'pump') return { kind: 'wrap', w: C(d.r), h: d.h * 50 };
   if (product === 'tub' || product === 'cup') { const rb = product === 'tub' ? d.r * 0.8 : d.r * 0.72; return { kind: 'wrap', w: Math.PI * (d.r + rb) * 100, h: d.h * 100 }; }

@@ -3,9 +3,9 @@
 // Because a plan is data, not a picture, every result stays editable.
 import { contrast, luminance, mix, isDark, autoInk, readable, averageColor, logoCoverage, plainCorners, paper, ink, FONTS, PATTERNS, BORDERS, CENTRES, borderType } from './art.js';
 
-export const PRODUCTS = ['can', 'slimcan', 'box', 'tub', 'jar', 'pouch', 'bottle', 'tube', 'papertube', 'cup', 'card', 'bag', 'tin', 'lidbox', 'bar', 'dropper', 'pump', 'takeout'];
-export const STYLES = ['classic', 'poster', 'label', 'monogram', 'editorial', 'minimal', 'heritage'];
-export const STYLE_NAMES = { classic: 'Classic', poster: 'Poster', label: 'Jar label', monogram: 'Signature pattern', editorial: 'Editorial', minimal: 'Minimal', heritage: 'Heritage' };
+export const PRODUCTS = ['can', 'slimcan', 'box', 'tub', 'jar', 'pouch', 'bottle', 'tube', 'papertube', 'cup', 'card', 'bag', 'tin', 'lidbox', 'bar', 'dropper', 'pump', 'takeout', 'drawer'];
+export const STYLES = ['classic', 'poster', 'label', 'monogram', 'editorial', 'minimal', 'heritage', 'folk', 'matchbox'];
+export const STYLE_NAMES = { classic: 'Classic', poster: 'Poster', label: 'Jar label', monogram: 'Signature pattern', editorial: 'Editorial', minimal: 'Minimal', heritage: 'Heritage', folk: 'Folk poster', matchbox: 'Matchbox label' };
 export const PLAN_KEYS = { product: PRODUCTS, style: STYLES, fontsDisplay: Object.keys(FONTS), pattern: Object.keys(PATTERNS).filter((p) => p !== 'none').concat('none'), border: Object.keys(BORDERS).filter((b) => b !== 'image'), finish: ['gloss', 'matte', 'metallic'], light: ['studio', 'sunlit', 'dramatic'] };
 
 /* Example plan
@@ -34,8 +34,8 @@ const COLOR_WORDS = { red: '#c0392b', green: '#2f7d4a', blue: '#2a5ca8', yellow:
 
 // Which packs make sense for what they sell (no keychains in a drink can).
 const PACK_RULES = [
-  [['earring', 'necklace', 'bracelet', 'jewel', 'ring '], ['lidbox', 'card', 'bag', 'box']],
-  [['keychain', 'key chain', 'charm', 'accessor', 'sticker', 'bookmark', 'hair clip', 'scrunch', 'crochet', 'phone case', 'toy', 'stationery', 'polymer clay', 'resin', 'pin badge', 'magnet'], ['card', 'box', 'lidbox', 'bag']],
+  [['earring', 'necklace', 'bracelet', 'jewel', 'ring '], ['lidbox', 'drawer', 'card', 'bag', 'box']],
+  [['keychain', 'key chain', 'charm', 'accessor', 'sticker', 'bookmark', 'hair clip', 'scrunch', 'crochet', 'phone case', 'toy', 'stationery', 'polymer clay', 'resin', 'pin badge', 'magnet'], ['card', 'drawer', 'box', 'lidbox', 'bag']],
   [['chocolate bar', 'protein bar', 'granola bar', 'soap bar', 'bar of'], ['bar', 'box', 'lidbox']],
   [['noodle', 'momo', 'takeaway', 'take-away', 'cloud kitchen', 'biryani', 'fried rice', 'street food'], ['takeout', 'bag', 'cup', 'box']],
   [['serum', 'face oil', 'beard oil', 'essential oil', 'tincture'], ['dropper', 'bottle', 'box']],
@@ -49,11 +49,11 @@ const PACK_RULES = [
   [['pickle', 'achaar', 'achar', 'jam', 'honey', 'ghee', 'chutney', 'spread', 'butter'], ['jar', 'bottle', 'pouch']],
   [['coffee', 'espresso', 'beans'], ['pouch', 'box', 'papertube', 'can', 'cup']],
   [['tea', 'chai', 'tulsi', 'matcha', 'kahwa'], ['tin', 'box', 'pouch', 'papertube']],
-  [['cookie', 'cake', 'brownie', 'bread', 'bakery', 'chocolate', 'mithai', 'sweets', 'laddoo', 'barfi', 'dessert box'], ['lidbox', 'box', 'bar', 'bag']],
+  [['cookie', 'cake', 'brownie', 'bread', 'bakery', 'chocolate', 'mithai', 'sweets', 'laddoo', 'barfi', 'dessert box'], ['lidbox', 'drawer', 'box', 'bar', 'bag']],
   [['snack', 'chips', 'namkeen', 'granola', 'nuts', 'makhana', 'flour', 'pasta', 'spice', 'masala', 'rice', 'dal', 'cereal', 'oats', 'millet'], ['pouch', 'box', 'jar', 'papertube']],
   [['pet', 'dog', 'cat'], ['pouch', 'box', 'bag']],
 ];
-const NAMED = { 'paper tube': 'papertube', 'gift tube': 'papertube', 'hang card': 'card', 'header card': 'card', 'shopping bag': 'bag', 'paper bag': 'bag', 'squeeze tube': 'tube', 'slim can': 'slimcan', 'gift box': 'lidbox', 'takeout box': 'takeout', 'noodle box': 'takeout', 'pump bottle': 'pump', 'dropper bottle': 'dropper' };
+const NAMED = { 'paper tube': 'papertube', 'gift tube': 'papertube', 'hang card': 'card', 'header card': 'card', 'shopping bag': 'bag', 'paper bag': 'bag', 'squeeze tube': 'tube', 'slim can': 'slimcan', 'gift box': 'lidbox', 'drawer box': 'drawer', 'matchbox': 'drawer', 'slide box': 'drawer', 'sliding box': 'drawer', 'takeout box': 'takeout', 'noodle box': 'takeout', 'pump bottle': 'pump', 'dropper bottle': 'dropper' };
 export function allowedPacks(t) {
   t = ` ${String(t).toLowerCase()} `;
   for (const [words, packs] of PACK_RULES) if (KW(t, words)) return packs;
@@ -101,7 +101,7 @@ export function designLocally(brief, { refColors = [], hasLogo = false } = {}) {
   const hindi = /[ऀ-ॿ]/.test(name);
   const tagline = KW(t, ['homemade', 'amma', 'nani', 'mom']) ? 'Made the way it is at home' : KW(t, ['organic', 'natural', 'herbal']) ? 'Pure, honest, natural' : KW(t, ['premium', 'luxury']) ? 'Crafted in small batches' : 'Made with care';
   const accessory = allowedPacks(t)[0] === 'card' || allowedPacks(t)[0] === 'bag';
-  const detail = accessory ? 'Handmade · 1 piece' : { jar: 'Net wt. 250 g', can: '330 ml', tub: 'Net wt. 450 g', pouch: 'Net wt. 200 g', box: 'Net wt. 250 g', bottle: '250 ml', tube: '100 ml', papertube: 'Net wt. 100 g', cup: '350 ml', card: '1 piece', bag: 'Gift bag', slimcan: '250 ml', tin: 'Net wt. 100 g', lidbox: 'Gift edition', bar: 'Net wt. 80 g', dropper: '30 ml', pump: '200 ml', takeout: 'Serves 1' }[product];
+  const detail = accessory ? 'Handmade · 1 piece' : { drawer: 'Net wt. 250 g', jar: 'Net wt. 250 g', can: '330 ml', tub: 'Net wt. 450 g', pouch: 'Net wt. 200 g', box: 'Net wt. 250 g', bottle: '250 ml', tube: '100 ml', papertube: 'Net wt. 100 g', cup: '350 ml', card: '1 piece', bag: 'Gift bag', slimcan: '250 ml', tin: 'Net wt. 100 g', lidbox: 'Gift edition', bar: 'Net wt. 80 g', dropper: '30 ml', pump: '200 ml', takeout: 'Serves 1' }[product];
   const deeper = luminance(base) < luminance(acc) ? base : acc;
   const dark = isDark(deeper) ? deeper : mix(deeper, '#14100c', 0.45);
   const light = isDark(base) ? mix(acc, '#ffffff', 0.82) : mix(base, '#ffffff', 0.86);
@@ -156,6 +156,8 @@ export function refineLocally(plan, instruction) {
   else if (col) { p.palette.pack = col[1]; did.push(`pack colour → ${col[0]}`); }
   if (KW(t, ['modern', 'clean', 'simple', 'minimal'])) { p.style = 'minimal'; p.fonts.display = 'Instrument Serif'; p.pattern.type = 'none'; p.border.type = 'crop'; did.push('cleaner, more minimal'); }
   if (KW(t, ['premium', 'luxury', 'expensive', 'elegant', 'classy'])) { p.style = 'classic'; p.palette.pack = mix(p.palette.pack, '#000000', 0.5); p.palette.accent = '#c9a35a'; p.fonts.display = 'DM Serif Display'; p.border.type = 'deco'; p.finish = 'gloss'; p.light = 'dramatic'; did.push('more premium'); }
+  if (KW(t, ['folk', 'maximal', 'illustrat', 'busy', 'pinterest'])) { p.style = 'folk'; p.pattern = { type: 'folk', opacity: 1 }; p.fonts.display = 'Shrikhand'; p.border.type = 'none'; p.centre = 'none'; did.push('folk poster style'); }
+  if (KW(t, ['matchbox', 'vintage', 'retro label'])) { p.style = 'matchbox'; p.pattern = { type: 'none', opacity: 0 }; p.fonts.display = 'Bebas Neue'; p.border.type = 'none'; p.centre = 'none'; did.push('matchbox label style'); }
   if (KW(t, ['fun', 'playful', 'young', 'bright', 'loud'])) { p.style = 'poster'; p.fonts.display = 'Bebas Neue'; p.pattern = { type: 'dots', opacity: 0.2 }; did.push('more playful'); }
   if (KW(t, ['traditional', 'desi', 'indian', 'ethnic', 'festive', 'diwali'])) { p.style = 'heritage'; p.border.type = 'jali'; p.pattern = { type: KW(t, ['diwali', 'festive']) ? 'rangoli' : 'blockprint', opacity: 0.5 }; did.push('more traditional'); }
   for (const pat of Object.keys(PATTERNS)) if (t.includes(pat)) { p.pattern = { type: pat, opacity: p.pattern?.opacity || 0.3 }; did.push(`${PATTERNS[pat]} pattern`); }
@@ -183,7 +185,7 @@ export function normalizePlan(p, { hasLogo } = {}) {
   p.style = pick(p.style === 'bold' ? 'poster' : p.style, STYLES, 'classic');
   p.palette = { pack: hexOk(p.palette?.pack, '#26324a'), accent: hexOk(p.palette?.accent, '#e9a03b'), background: hexOk(p.palette?.background, '#efe9df') };
   // make sure accent text/rules read on the pack (the AI sometimes picks two mid-tones)
-  if (p.style !== 'bold') p.palette.accent = readable(p.palette.accent, p.style === 'minimal' ? mix(p.palette.pack, '#ffffff', 0.9) : p.palette.pack, 2.2);
+  if (p.style !== 'bold' && p.style !== 'folk') p.palette.accent = readable(p.palette.accent, p.style === 'minimal' ? mix(p.palette.pack, '#ffffff', 0.9) : p.palette.pack, 2.2);
   p.fonts = { display: pick(p.fonts?.display, Object.keys(FONTS), 'DM Serif Display'), body: pick(p.fonts?.body, Object.keys(FONTS), 'Inter') };
   if (/[ऀ-ॿ]/.test(`${p.name}${p.tagline}`) && !['Tiro Devanagari Hindi', 'Mukta'].includes(p.fonts.display)) p.fonts.display = 'Tiro Devanagari Hindi';
   p.pattern = { type: pick(p.pattern?.type, Object.keys(PATTERNS), 'none'), opacity: Math.min(0.7, Math.max(0, +p.pattern?.opacity || 0.18)) };
@@ -203,7 +205,7 @@ export function audit(b, product) {
   const c1 = contrast(fg, pap);
   if (c1 < 4.5) out.push({ level: 'high', msg: `Body text is hard to read (contrast ${c1.toFixed(1)}:1, needs 4.5).`, fix: 'Fix text colour', patch: { ink: autoInk(pap) } });
   const c2 = contrast(b.accent, pap);
-  if (c2 < 1.6 && b.style !== 'bold') out.push({ level: 'mid', msg: 'Accent colour almost disappears on the pack.', fix: 'Boost accent', patch: { accent: readable(b.accent, pap, 2.4) } });
+  if (c2 < 1.6 && b.style !== 'bold' && b.style !== 'folk') out.push({ level: 'mid', msg: 'Accent colour almost disappears on the pack.', fix: 'Boost accent', patch: { accent: readable(b.accent, pap, 2.4) } });
   // logos that are mostly solid (round badges etc.) bring their own background, so they can't blend in
   if (b.logo && !b.logoPlate && b.logoSource === 'upload' && logoCoverage(b.logo) < 0.5) {
     const lc = contrast(averageColor(b.logo), pap);
@@ -241,6 +243,12 @@ export async function askAI(body) {
 // Each "vibe" is a whole look: layout, type, border, pattern, finish, light and a family of palettes.
 // The AI (or the built-in designer) supplies the words; vibes guarantee no two concepts look alike.
 export const VIBES = {
+  folk: { concept: 'Folk poster', style: 'folk', fonts: { display: 'Shrikhand', body: 'Space Grotesk' }, border: 'none', centre: 'none', pattern: { type: 'folk', opacity: 1 }, finish: 'matte', light: 'sunlit',
+    colour: 'Two loud, clashing colours with every inch covered in little hand-drawn motifs — like a screen-printed folk poster.',
+    palettes: [{ pack: '#5fb4e6', accent: '#ef4e23', background: '#141414' }, { pack: '#f06a9b', accent: '#1f8a4c', background: '#fde4ee' }, { pack: '#f3c12b', accent: '#d6336c', background: '#2a1a12' }, { pack: '#1e8c8c', accent: '#f2542d', background: '#f3e9da' }, { pack: '#e9452f', accent: '#5ec2e8', background: '#1d1d1d' }] },
+  matchbox: { concept: 'Matchbox label', style: 'matchbox', fonts: { display: 'Bebas Neue', body: 'Space Grotesk' }, border: 'none', centre: 'none', pattern: { type: 'none', opacity: 0 }, finish: 'matte', light: 'studio',
+    colour: 'Vintage printing-press colours: one ink on warm paper, like an old matchbox label.',
+    palettes: [{ pack: '#f6e9cf', accent: '#d7263d', background: '#e9dcc4' }, { pack: '#1d3f8c', accent: '#f2b705', background: '#f2ead8' }, { pack: '#f4d35e', accent: '#2f5d9e', background: '#2b2b2b' }, { pack: '#f7b2bd', accent: '#5b2a86', background: '#fbe9ec' }, { pack: '#2f7d4f', accent: '#f4d35e', background: '#ebe5d3' }] },
   pop: { concept: 'Bright & playful', style: 'poster', fonts: { display: 'Bricolage Grotesque', body: 'Space Grotesk' }, border: 'none', centre: 'none', pattern: { type: 'dots', opacity: 0.14 }, finish: 'gloss', light: 'sunlit',
     colour: 'Sunny, saturated colours with one punchy contrast — impossible to miss on a shelf or a feed.',
     palettes: [{ pack: '#ffd23f', accent: '#e4572e', background: '#fff4d6' }, { pack: '#ff8fab', accent: '#3a0ca3', background: '#ffe5ec' }, { pack: '#7bdff2', accent: '#f15bb5', background: '#e8fbff' }, { pack: '#b8e04a', accent: '#2d3a8c', background: '#f3fadf' }] },
@@ -263,7 +271,7 @@ export const VIBES = {
     colour: 'Jewel tones with marigold and saffron — festive, rooted and proud.',
     palettes: [{ pack: '#8b1e3f', accent: '#f2c14e', background: '#f5e6d3' }, { pack: '#1f4e5f', accent: '#f4a259', background: '#e6eef0' }, { pack: '#2e6b3a', accent: '#f6d27a', background: '#ecf1e4' }, { pack: '#5b2a86', accent: '#f7b538', background: '#efe7f5' }] },
 };
-const STYLE_VIBE = { poster: 'pop', label: 'pastel', monogram: 'luxe', minimal: 'clean', classic: 'craft', editorial: 'editorial', heritage: 'heritage' };
+const STYLE_VIBE = { folk: 'folk', matchbox: 'matchbox', poster: 'pop', label: 'pastel', monogram: 'luxe', minimal: 'clean', classic: 'craft', editorial: 'editorial', heritage: 'heritage' };
 function hsl(hex) {
   const n = parseInt(String(hex).slice(1), 16), r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
@@ -278,11 +286,11 @@ function palDist(a, b) {
 }
 export function diversify(plans, brief = '', seed = Math.random()) {
   const t = String(brief).toLowerCase(), has = (w) => w.some((x) => t.includes(x));
-  let order = ['pop', 'pastel', 'luxe', 'clean', 'craft', 'editorial'];
-  if (has(['traditional', 'indian', 'desi', 'masala', 'chai', 'ayurved', 'mithai', 'pickle', 'achaar', 'heritage', 'festive', 'diwali'])) order = ['heritage', 'craft', 'luxe', 'editorial', 'pop', 'clean'];
-  else if (has(['premium', 'luxury', 'elegant', 'gift'])) order = ['luxe', 'editorial', 'clean', 'craft', 'pastel', 'pop'];
-  else if (has(['natural', 'organic', 'handmade', 'herbal', 'eco'])) order = ['craft', 'clean', 'pastel', 'luxe', 'editorial', 'pop'];
-  else if (has(['kid', 'cute', 'fun', 'candy', 'toy', 'magnet', 'sticker', 'sweet'])) order = ['pop', 'pastel', 'craft', 'editorial', 'luxe', 'clean'];
+  let order = ['folk', 'pop', 'matchbox', 'luxe', 'pastel', 'editorial'];
+  if (has(['traditional', 'indian', 'desi', 'masala', 'chai', 'ayurved', 'mithai', 'pickle', 'achaar', 'heritage', 'festive', 'diwali'])) order = ['heritage', 'folk', 'matchbox', 'craft', 'luxe', 'editorial'];
+  else if (has(['premium', 'luxury', 'elegant'])) order = ['luxe', 'matchbox', 'editorial', 'folk', 'clean', 'craft'];
+  else if (has(['natural', 'organic', 'handmade', 'herbal', 'eco'])) order = ['craft', 'folk', 'clean', 'matchbox', 'pastel', 'luxe'];
+  else if (has(['kid', 'cute', 'fun', 'candy', 'toy', 'magnet', 'sticker', 'sweet'])) order = ['pop', 'folk', 'matchbox', 'pastel', 'editorial', 'craft'];
   // keep the AI's best idea first: give it the vibe that matches its layout
   const firstVibe = STYLE_VIBE[plans[0]?.style];
   if (firstVibe) order = [firstVibe, ...order.filter((v) => v !== firstVibe)].slice(0, 6);
@@ -307,9 +315,9 @@ export function diversify(plans, brief = '', seed = Math.random()) {
     if (!fontOk) p.reasoning.type = `${v.fonts.display} sets the tone for this direction.`;
     const bt = borderType(base.border?.type);
     p.border = { type: own && bt !== 'none' && !used.borders.has(bt) ? bt : v.border };
-    p.centre = ['poster', 'label', 'monogram', 'editorial'].includes(v.style) ? 'none' : own && base.centre && base.centre !== 'none' ? base.centre : v.centre;
+    p.centre = ['poster', 'label', 'monogram', 'editorial', 'folk', 'matchbox'].includes(v.style) ? 'none' : own && base.centre && base.centre !== 'none' ? base.centre : v.centre;
     const pt = base.pattern?.type;
-    p.pattern = own && pt && pt !== 'none' && !used.patterns.has(pt) ? base.pattern : { ...v.pattern };
+    p.pattern = v.style === 'folk' ? { ...v.pattern } : own && pt && pt !== 'none' && pt !== 'folk' && !used.patterns.has(pt) ? base.pattern : { ...v.pattern };
     p.finish = v.finish; p.light = v.light;
     let name = String(base.concept || '').replace(/\b(\w+)\s+\1\b/gi, '$1').trim();
     if (!name || used.names.has(name.toLowerCase()) || !own) name = v.concept;

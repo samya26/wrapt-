@@ -43,7 +43,8 @@ import { openLogoStudio, initLogoStudio } from './logostudio.js';
 import { initLanding } from './landing.js';
 import { openEditor, initEditor } from './editor.js';
 import { loadGenFonts } from './genmark.js';
-import { designLocally, refineLocally, normalizePlan, audit, askAI, allowedPacks, STYLE_NAMES, diversify } from './design.js';
+import { motifSetFor } from './motifs.js';
+import { designLocally, refineLocally, normalizePlan, audit, askAI, allowedPacks, STYLE_NAMES, diversify, detectProduct } from './design.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -93,6 +94,11 @@ addEventListener('keydown', (e) => {
 });
 
 // ---------- build ----------
+let drawerOpen = false;
+$('#drawer-btn').addEventListener('click', () => {
+  drawerOpen = !drawerOpen; studio.playFold(drawerOpen ? 1 : 0, drawerOpen ? 0 : 1, 1100);
+  $('#drawer-btn').textContent = drawerOpen ? 'Close box' : 'Open box';
+});
 let buildT, lastProduct;
 function refreshLogo() {
   const b = state.brand;
@@ -110,7 +116,7 @@ function logoOnFor(b) {
 }
 function specLogo(b) { b.logoOn = logoOnFor(b); const sp = { ...b.logoSpec, name: b.name || b.logoSpec.name, ...(state.logoLocked ? {} : { colors: { primary: ink(b), secondary: b.accent } }) }; return renderLogo(sp, packColors(sp, paper(b), b.accent, ink(b))).canvas; }
 // a clean name-only logo when nobody designed one yet (used for all concepts, so the brand stays consistent)
-const STYLE_PREFS = { classic: { modern: -0.5, serious: 0.5, bold: 0 }, minimal: { modern: 0.6, serious: 0.4, bold: -0.3, precise: 0.6 }, bold: { modern: 0.4, serious: -0.5, bold: 0.8 }, poster: { modern: 0.4, serious: -0.4, bold: 0.7 }, label: { modern: -0.4, serious: 0, bold: 0.3 }, monogram: { modern: 0, serious: 0.5, bold: 0, precise: 0.5 }, editorial: { modern: 0.3, serious: 0.6, bold: 0.5 }, heritage: { modern: -0.7, serious: 0, bold: 0.4, precise: -0.3 } };
+const STYLE_PREFS = { folk: { modern: -0.3, serious: -0.7, bold: 0.8, precise: -0.4 }, matchbox: { modern: -0.6, serious: 0, bold: 0.7, precise: 0.2 }, classic: { modern: -0.5, serious: 0.5, bold: 0 }, minimal: { modern: 0.6, serious: 0.4, bold: -0.3, precise: 0.6 }, bold: { modern: 0.4, serious: -0.5, bold: 0.8 }, poster: { modern: 0.4, serious: -0.4, bold: 0.7 }, label: { modern: -0.4, serious: 0, bold: 0.3 }, monogram: { modern: 0, serious: 0.5, bold: 0, precise: 0.5 }, editorial: { modern: 0.3, serious: 0.6, bold: 0.5 }, heritage: { modern: -0.7, serious: 0, bold: 0.4, precise: -0.3 } };
 function autoSpec(p) {
   const dark = luminance(p.palette.pack) < luminance(p.palette.accent) ? p.palette.pack : p.palette.accent;
   const opts = designLogos({ name: p.name, brief: $('#brief').value, type: 'surprise', prefs: STYLE_PREFS[p.style] || {}, colors: [dark, p.palette.accent] });
@@ -125,6 +131,7 @@ function rebuild(now = false, { commitIt = true } = {}) {
     studio.setProduct(built, { keepCamera: lastProduct === state.product });
     lastProduct = state.product;
     $('#fold-row').hidden = state.product !== 'box';
+    $('#drawer-btn').hidden = state.product !== 'drawer'; $('#drawer-btn').textContent = 'Open box'; drawerOpen = false;
     renderAudit();
     if (commitIt) commit();
   };
@@ -158,7 +165,7 @@ function planFromState() {
     logo: b.logoSpec, finish: state.finish, light: state.light, reasoning: state.plan?.reasoning || {} });
 }
 function brandFromPlan(p, keepUploaded) {
-  const b = { ...state.brand, fonts: { ...p.fonts }, pattern: { ...p.pattern, image: null }, border: { ...state.brand.border, type: borderType(p.border.type), image: null },
+  const b = { ...state.brand, motifs: motifSetFor(`${$('#brief')?.value || ''} ${p.name}`), fonts: { ...p.fonts }, pattern: { ...p.pattern, image: null }, border: { ...state.brand.border, type: borderType(p.border.type), image: null },
     name: p.name, tagline: p.tagline, detail: p.detail, pack: p.palette.pack, accent: p.palette.accent, ink: null, style: p.style, centre: p.centre || 'none',
     logoSpec: state.brand.logoSpec || autoSpec(p), logoScale: p.logoScale ?? 1, logoY: 0, logoPlate: false, artwork: null, layers: state.brand.layers || [], els: {} };
   if (keepUploaded && state.brand.uploadedLogo) { b.logo = state.brand.uploadedLogo; b.logoSource = 'upload'; b.logoHasName = false; }
@@ -232,7 +239,8 @@ async function generate(opts = {}) {
   plans = diversify([...plans, ...local], brief);
   // every concept on the same pack, so you compare designs, not shapes
   const fits = allowedPacks(brief), named = /\b(can|box|tub|jar|pouch|bottle|tube|cup|card|bag)s?\b|paper tube|hang card/i.test(brief);
-  const pack = opts.product || (named || fits.includes(plans[0].product) ? plans[0].product : fits[0]);
+  const namedPack = /\b(drawer|matchbox|slide box|sliding box|gift box|takeout|pump|dropper|tin)\b/i.test(brief) || named ? detectProduct(brief.toLowerCase()) : null;
+  const pack = opts.product || namedPack || (fits.includes(plans[0].product) ? plans[0].product : fits[0]);
   plans = plans.map((p) => normalizePlan({ ...p, ...(opts.name ? { name: opts.name } : {}), product: pack }, { hasLogo }));
   // one logo for all three concepts: the locked one, or a clean wordmark
   if (!locked && !hasLogo) state.brand.logoSpec = autoSpec(plans[0]);
@@ -675,7 +683,7 @@ function demoBrand(o) {
     pattern: o.pattern ? { type: o.pattern, opacity: 0.14 } : p.pattern, palette: o.palette ? { ...p.palette, ...o.palette } : p.palette, tagline: o.tagline || p.tagline, detail: o.detail || p.detail });
   const dark = luminance(p.palette.pack) < luminance(p.palette.accent) ? p.palette.pack : p.palette.accent;
   const spec = designLogos({ name: o.name, brief: o.brief, type: o.type || 'wordmark', prefs: STYLE_PREFS[p.style] || {}, colors: [dark, p.palette.accent] })[o.li || 0];
-  const b = { ...state.brand, fonts: { ...p.fonts }, pattern: { ...p.pattern, image: null }, border: { type: p.border.type, size: 0.06, inset: 0.045, color: o.bcol || 'accent', corners: false, image: null },
+  const b = { ...state.brand, motifs: motifSetFor(`${$('#brief')?.value || ''} ${p.name}`), fonts: { ...p.fonts }, pattern: { ...p.pattern, image: null }, border: { type: p.border.type, size: 0.06, inset: 0.045, color: o.bcol || 'accent', corners: false, image: null },
     name: p.name, tagline: p.tagline, detail: p.detail, pack: p.palette.pack, accent: p.palette.accent, ink: null, style: p.style, centre: p.centre,
     logoSpec: spec, logoSource: 'spec', logoScale: 1, logoY: 0, logoPlate: false, artwork: null, textScale: 1 };
   b.logo = specLogo(b); b.logoHasName = true;
